@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart      # form posts from the recruiter frontend
+
+# Deliberately absent: an HTTP client. app/notify.py calls Linq with stdlib
+# urllib — one outbound call does not justify a dependency. Add httpx if
+# something else needs it.
