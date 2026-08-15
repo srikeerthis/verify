@@ -2,15 +2,11 @@
 sandbox and runs install/build/test there, watching for suspicious runtime
 behavior (unexpected network egress, a failed install).
 
-This runs natively in this repo via the official `superserve` Python SDK
-(`pip install superserve`) — it does not depend on the Node scan service.
-scan_client.py's call to the Node service already runs its own dynamic scan
-internally as part of the CLEAN/SUSPICIOUS/MALICIOUS verdict; this module is a
-second, independent Superserve invocation so dynamic execution is directly
-visible in this repo's own code, not hidden behind another service.
+Runs natively via the official `superserve` Python SDK (`pip install
+superserve`) — fully self-contained, no external service.
 
-Only handles zip sources for now — git sources are left to the Node service's
-own sandbox scan (see scan_client.py).
+Only handles zip sources for now — see pipeline.py's process() for how a git
+source is skipped (dynamic scanning isn't run for those yet).
 """
 
 import logging
@@ -66,22 +62,22 @@ def run(zip_bytes: bytes) -> tuple[list[Finding], dict]:
 
         if has_pkg_json:
             install = sandbox.commands.run(
-                "cd /repo && npm install --no-audit --no-fund", timeout_ms=120_000
+                "cd /repo && npm install --no-audit --no-fund", timeout_seconds=120
             )
             summary["install"] = install.exit_code == 0
 
             build = sandbox.commands.run(
-                "cd /repo && npm run build --if-present", timeout_ms=120_000
+                "cd /repo && npm run build --if-present", timeout_seconds=120
             )
             summary["build"] = build.exit_code == 0
 
             test = sandbox.commands.run(
-                "cd /repo && npm test --if-present", timeout_ms=120_000
+                "cd /repo && npm test --if-present", timeout_seconds=120
             )
             summary["test"] = test.exit_code == 0
         elif has_requirements:
             install = sandbox.commands.run(
-                "cd /repo && pip install -r requirements.txt", timeout_ms=120_000
+                "cd /repo && pip install -r requirements.txt", timeout_seconds=120
             )
             summary["install"] = install.exit_code == 0
 
