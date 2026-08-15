@@ -1,0 +1,3 @@
+{#- SMS to the candidate, the moment their link arrives. Fires before any scan,
+    so it must not claim anything about the contents. -#}
+Verify: got your solution link, checking it now. We'll pass it to the company once it clears. Track it: {{ verify_url }}

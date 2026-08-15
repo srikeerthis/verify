@@ -52,20 +52,30 @@ E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 
 Event = Literal[
     "package_received",
+    "package_cleared",
     "package_ready",
     "package_blocked",
     "escalation_resolved",
+    "submission_received",
     "submission_verified",
 ]
 
 # event -> which packages column holds the recipient.
 # Linq is SMS, so there is no subject line — the whole message is the body.
+#
+# Both parties get an acknowledgement when they hand something over and a result
+# when it is checked. Silence never means success: a recruiter whose package is
+# clean hears so, not just when it is blocked.
 EVENTS: dict[str, str] = {
-    "package_received": "company_phone",
-    "package_ready": "candidate_phone",
-    "package_blocked": "company_phone",
-    "escalation_resolved": "company_phone",
-    "submission_verified": "company_phone",
+    # challenge, recruiter -> candidate
+    "package_received": "company_phone",     # ack: we have it, checking
+    "package_cleared": "company_phone",      # result: clean, sent to candidate
+    "package_ready": "candidate_phone",      # delivery: here is your take-home
+    "package_blocked": "company_phone",      # result: blocked
+    "escalation_resolved": "company_phone",  # result: a human decided
+    # submission, candidate -> recruiter
+    "submission_received": "candidate_phone",  # ack: got your link, checking
+    "submission_verified": "company_phone",    # result: it passed
 }
 
 _env = Environment(

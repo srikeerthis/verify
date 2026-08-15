@@ -1,0 +1,3 @@
+{#- SMS to the recruiter. The "all clear" — without this, silence is the only
+    signal that nothing went wrong, which is no signal at all. -#}
+Verify: your take-home passed every check and has been sent to the candidate. Nothing in it reads credentials or runs on install. Signed verdict: {{ download_page or verify_url }}

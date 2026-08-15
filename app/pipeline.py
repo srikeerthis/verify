@@ -82,6 +82,10 @@ def create_submission(*, parent_id: str, source_url: str) -> str:
         conn.commit()
 
     log.info("intake %s: submission answering %s", package_id, parent_id)
+    # Acknowledge to the candidate that their link landed. Mirrors the
+    # package_received the recruiter gets on intake — whoever hands something
+    # over hears back immediately, before any scanning happens.
+    notify("submission_received", package_id)
     return package_id
 
 
@@ -201,6 +205,9 @@ def _finalize(package_id: str, verdict: str, *, escalated: bool = False) -> None
 
     if direction == "to_candidate":
         workflow.announce("package_ready", package_id)
+        # Tell the recruiter it cleared. Without this they only ever hear from
+        # us when something is wrong, so silence has to carry the good news.
+        workflow.announce("package_cleared", package_id)
     else:
         workflow.announce("submission_verified", package_id)
 

@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 # agent path text different people.
 EVENT_ROLES: dict[str, str] = {
     "package_received": "recruiter",
+    "package_cleared": "recruiter",
     "package_ready": "candidate",
     "package_blocked": "recruiter",
     "escalation_resolved": "recruiter",
@@ -43,6 +44,12 @@ EVENT_PROMPTS: dict[str, str] = {
         "The recruiter just uploaded a take-home package. It is queued for "
         "scanning. Text the recruiter a one-line confirmation that you have "
         "it and are scanning it now. No links yet."
+    ),
+    "package_cleared": (
+        "The recruiter's take-home scanned CLEAN, is signed, and has just been "
+        "sent to the candidate. Text the recruiter the all-clear: it passed, "
+        "it is on its way, and here is the report link. Without this they only "
+        "ever hear from us when something is wrong."
     ),
     "package_ready": (
         "The take-home scanned CLEAN, is signed, and is published. Text the "
