@@ -4,3 +4,8 @@ verify.db
 keys/
 .env
 .venv/
+
+# web app (zipsign/)
+zipsign/node_modules/
+zipsign/data/
+zipsign/.env

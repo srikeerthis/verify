@@ -218,6 +218,11 @@ def notify(event: Event, package_id: str) -> None:
             body = _env.get_template(f"notify/{event}.txt").render(
                 pkg=dict(pkg),
                 verify_url=f"{config.PUBLIC_BASE_URL}/verify/{package_id}",
+                # Web app pages (may be NULL when the handoff is off or
+                # failed) — templates fall back to verify_url.
+                download_page=pkg["webapp_verify_url"],
+                signature_link=pkg["webapp_signature_url"],
+                pubkey_link=pkg["webapp_publickey_url"],
             ).strip()
 
             try:

@@ -17,7 +17,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app import agent, escalate, ingest, signing, static_scan
+from app import agent, escalate, handoff, ingest, signing, static_scan
 from app.db import get_conn, get_package, set_status
 from app.notify import notify
 
@@ -191,7 +191,11 @@ def _finalize(package_id: str, verdict: str, *, escalated: bool = False) -> None
         notify("package_blocked", package_id)
         return
 
-    # Signature exists — safe to hand the link on.
+    # Signature exists — publish to the web app so the text can carry a real
+    # download page, then hand the link on. Handoff failure degrades to the
+    # report link rather than blocking delivery.
+    handoff.publish(package_id)
+
     if direction == "to_candidate":
         notify("package_ready", package_id)
     else:

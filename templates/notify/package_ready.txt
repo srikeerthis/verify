@@ -1,2 +1,5 @@
-{#- SMS. This is the one message a candidate gets — it has to carry the trust claim. -#}
-Verify: your take-home is checked and ready. It doesn't read your SSH keys, cloud creds or browser data, and doesn't run code on install. Signed proof: {{ verify_url }}
+{#- SMS. The one message a candidate gets — it has to carry the trust claim.
+    download_page is the web app's verify page: the signed zip (verdict +
+    report inside), signature, and public key all hang off it. Falls back to
+    the report endpoint when the web app handoff is off. -#}
+Verify: your take-home is checked and ready. It doesn't read your SSH keys, cloud creds or browser data, and doesn't run code on install. Download the signed package: {{ download_page or verify_url }}

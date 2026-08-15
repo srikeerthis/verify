@@ -68,6 +68,16 @@ TERAC_MCP_URL = _get("TERAC_MCP_URL")
 STRIPE_SECRET_KEY = _get("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = _get("STRIPE_PRICE_ID")
 
+# --- webapp handoff (handoff.py) ----------------------------------------
+# The Verify web app (zipsign/ in this repo): the human-friendly front end that
+# serves signed packages and verify pages. The pipeline publishes each
+# delivered package there so Linq texts carry a real download link instead
+# of a JSON endpoint. Leave WEBAPP_API_KEY empty to disable the handoff.
+WEBAPP_BASE_URL = _get("WEBAPP_BASE_URL", "http://localhost:3000")
+WEBAPP_API_KEY = _get("WEBAPP_API_KEY")
+# The ed25519 signing identity the web app files the package under.
+WEBAPP_SIGNER_EMAIL = _get("WEBAPP_SIGNER_EMAIL", "agents@verify.app")
+
 
 def is_configured(*keys: str) -> bool:
     """True when every named setting has a non-empty value.

@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS packages (
     signature       TEXT,
     signed_at       TEXT,
 
+    -- web app handoff (handoff.py): links to the signed package pages the
+    -- Linq texts carry. NULL until the package is published there.
+    webapp_id            TEXT,
+    webapp_verify_url    TEXT,
+    webapp_download_url  TEXT,
+    webapp_signature_url TEXT,
+    webapp_publickey_url TEXT,
+
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
