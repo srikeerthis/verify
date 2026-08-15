@@ -50,6 +50,12 @@ LINQ_SENDER_ID = _get("LINQ_SENDER_ID")
 # inbound webhooks are rejected rather than trusted.
 LINQ_WEBHOOK_SECRET = _get("LINQ_WEBHOOK_SECRET")
 
+# --- test handsets ---
+# Used by scripts to drive a live test. Nothing in the request path reads these;
+# real recipients always come from the packages row.
+TEST_COMPANY_PHONE = _get("TEST_COMPANY_PHONE")
+TEST_CANDIDATE_PHONE = _get("TEST_CANDIDATE_PHONE")
+
 # --- agent (agent.py) ---------------------------------------------------
 ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY")
 AGENT_MODEL = _get("AGENT_MODEL", "claude-sonnet-5")

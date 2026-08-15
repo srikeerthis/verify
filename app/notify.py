@@ -115,11 +115,25 @@ def _send(recipient: str, body: str, idempotency_key: str) -> str:
 
     try:
         with urllib.request.urlopen(req, timeout=5.0) as resp:
-            return json.loads(resp.read() or b"{}").get("id", "")
+            return _message_id(json.loads(resp.read() or b"{}"))
     except urllib.error.HTTPError as exc:
         raise _linq_error(exc) from exc
     except Exception as exc:  # network, DNS, timeout — all transient
         raise LinqError(f"{type(exc).__name__}: {exc}", retryable=True) from exc
+
+
+def _message_id(body: dict) -> str:
+    """Pull the message id out of a send response.
+
+    The live API returns the whole chat — {chat_id, handles, message: {...}} —
+    with the id at `message.id`, not the flat {"id": ...} the docs example
+    shows. Checked against a real send on 2026-08-15. Both shapes are accepted
+    so a docs-shaped response does not silently lose the id.
+    """
+    message = body.get("message")
+    if isinstance(message, dict) and message.get("id"):
+        return str(message["id"])
+    return str(body.get("id") or "")
 
 
 def _linq_error(exc: urllib.error.HTTPError) -> LinqError:
