@@ -1,0 +1,2 @@
+{#- SMS. Keep under ~300 chars: one link, one fact, no preamble. -#}
+Verify: got your take-home package. Scanning it now for credential-stealing patterns. We'll text you when it clears. {{ verify_url }}

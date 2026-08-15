@@ -1,0 +1,2 @@
+{#- SMS. pkg.human_verdict is set by escalate.py when Terac returns. -#}
+Verify: human review done on your package. Verdict: {{ pkg.human_verdict or pkg.verdict }}. Two independent reviewers; splits resolve to SUSPICIOUS. Full report: {{ verify_url }}

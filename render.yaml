@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: verify
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      # Secrets: set these in the Render dashboard, never in this file.
+      # sync:false means "prompt me, do not store in git".
+      - key: LINQ_API_KEY
+        sync: false
+      - key: LINQ_WEBHOOK_SECRET
+        sync: false
+      - key: LINQ_SENDER_ID
+        sync: false
+      # Must match the deployed URL or every link we text points at localhost.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: LINQ_API_BASE
+        value: https://api.linqapp.com/api/partner/v3
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+# Note: the free plan has an ephemeral filesystem, so verify.db is wiped on every
+# deploy and on the idle spin-down. Fine for a demo, but do not redeploy midway
+# through one. To keep data, move to a paid plan and attach a disk:
+#
+#   disk:
+#     name: verify-data
+#     mountPath: /data
+#     sizeGB: 1
+#
+# then set DB_PATH=/data/verify.db

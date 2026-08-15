@@ -1,0 +1,4 @@
+{#- SMS. Company side, step 9. Two links: open the submission through the
+    web app's verify page (signed zip + signature + public key), and the
+    signed verdict as its own proof. -#}
+Verify: the candidate's submission passed the same checks and is ready to open. Nothing in it reads credentials or runs on install. Open it: {{ download_page or verify_url }} Signed verdict: {{ verify_url }}

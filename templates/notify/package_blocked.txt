@@ -1,0 +1,2 @@
+{#- SMS. Do not list findings here — send them to the report. -#}
+Verify: your take-home package was BLOCKED and not delivered. The scan found credential-theft patterns. Findings with file, line and reason: {{ verify_url }}

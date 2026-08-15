@@ -1,0 +1,108 @@
+{#- Shared shell for the pipeline's own pages. Deliberately self-contained:
+    no CDN fonts, no build step, and it has to read on a phone because that is
+    where every one of these links is opened. -#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Verify{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #fff; --border: #e3e6ea; --border-strong: #d0d5dc;
+    --text: #12161c; --muted: #667085; --accent: #4f46e5;
+    --ok: #17795e; --ok-bg: #e6f4ef; --warn: #8a6410; --warn-bg: #fbf1dc;
+    --bad: #b42318; --bad-bg: #fdeceb;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --surface: #171b21; --border: #262c34; --border-strong: #333b45;
+      --text: #e8eaed; --muted: #98a2b3; --accent: #a5b4fc;
+      --ok: #6ee7b7; --ok-bg: #12241d; --warn: #e0b95f; --warn-bg: #2a2313;
+      --bad: #fca5a5; --bad-bg: #2b1616;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .nav { border-bottom: 1px solid var(--border); background: var(--surface); }
+  .nav-inner {
+    max-width: 720px; margin: 0 auto; padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: var(--text); }
+  .brand-mark {
+    display: inline-grid; place-items: center; width: 22px; height: 22px;
+    border-radius: 6px; background: var(--accent); color: #fff; margin-right: 8px;
+    vertical-align: -5px;
+  }
+  .nav-tag { color: var(--muted); font-size: 13px; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 28px 20px 64px; }
+  .hero { margin-bottom: 22px; }
+  h1 { font-size: clamp(24px, 6vw, 32px); line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .tag { color: var(--muted); margin: 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  table.meta { width: 100%; border-collapse: collapse; }
+  table.meta td { padding: 7px 0; vertical-align: top; border-bottom: 1px solid var(--border); }
+  table.meta tr:last-child td { border-bottom: 0; }
+  table.meta td:first-child { color: var(--muted); width: 38%; }
+  code.hash { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+  .pill {
+    display: inline-block; padding: 4px 11px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .btn {
+    display: inline-block; padding: 10px 16px; border-radius: 9px;
+    border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--text); text-decoration: none; font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .hint { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+  .hint:last-child { margin-bottom: 0; }
+  ol.steps { margin: 0; padding-left: 20px; color: var(--muted); }
+  ol.steps li { margin: 6px 0; }
+  ol.steps li.now { color: var(--text); font-weight: 600; }
+  ol.steps li.done { color: var(--muted); }
+  input[type=url], input[type=file] {
+    width: 100%; padding: 11px 13px; border-radius: 9px; font-size: 15px;
+    border: 1px solid var(--border-strong); background: var(--bg); color: var(--text);
+    font-family: inherit;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label { display: block; font-size: 13.5px; color: var(--muted); margin-bottom: 6px; }
+  .field { margin-bottom: 16px; }
+  .finding {
+    border-left: 3px solid var(--bad); padding: 2px 0 2px 12px; margin: 12px 0;
+  }
+  .finding .where { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .status-msg { padding: 11px 14px; border-radius: 9px; font-size: 14px; margin-top: 14px; }
+  .status-msg.err { background: var(--bad-bg); color: var(--bad); }
+  .status-msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 28px; }
+</style>
+</head>
+<body>
+<header class="nav"><div class="nav-inner">
+  <a class="brand" href="/"><span class="brand-mark">&#10003;</span>Verify</a>
+  <span class="nav-tag">{% block navtag %}Checked before it reaches you{% endblock %}</span>
+</div></header>
+<main class="wrap">
+{% block content %}{% endblock %}
+<p class="footer">Verify &middot; every package scanned and signed before it changes hands</p>
+</main>
+</body>
+</html>

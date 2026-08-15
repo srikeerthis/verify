@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% set is_challenge = pkg.direction == "to_candidate" %}
+{% block title %}Verify — {{ "take-home" if is_challenge else "submission" }} {{ pkg.package_id[:8] }}{% endblock %}
+{% block navtag %}{{ "Take-home package" if is_challenge else "Candidate submission" }}{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>{{ headline }}</h1>
+  <p class="tag">{{ subhead }}</p>
+</div>
+
+{% if is_challenge and pkg.status == "delivered" %}
+<p class="hint">The candidate has been texted the package and a link to send their solution back.</p>
+{% endif %}
+
+<section class="card">
+  <h2>Where this is</h2>
+  <ol class="steps">
+    {% for step in steps %}
+    <li class="{{ step.state }}">{{ step.label }}</li>
+    {% endfor %}
+  </ol>
+  {% if pkg.status in ("received", "scanning") %}
+  <p class="hint" style="margin-top:14px">This page refreshes itself while the scan runs.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Result</h2>
+  <table class="meta">
+    <tr><td>Verdict</td><td><span class="pill {{ pill }}">{{ verdict_label }}</span></td></tr>
+    {% if pkg.human_reviewed %}
+    <tr><td>Human review</td><td>A reviewer looked at this and said {{ pkg.human_verdict }}</td></tr>
+    {% endif %}
+    <tr><td>Signature</td><td>{{ "Signed " + pkg.signed_at[:19].replace("T", " ") + " UTC" if pkg.signed_at else "Not signed yet" }}</td></tr>
+    {% if pkg.sha256 %}
+    <tr><td>SHA-256</td><td><code class="hash">{{ pkg.sha256 }}</code></td></tr>
+    {% endif %}
+    <tr><td>Reference</td><td><code class="hash">{{ pkg.package_id }}</code></td></tr>
+  </table>
+
+  {% if findings %}
+  <h2 style="margin-top:22px">What the scan found</h2>
+  {% for f in findings %}
+  <div class="finding">
+    <div>{{ f.why }}</div>
+    <div class="where">{{ f.file }}{% if f.line %}:{{ f.line }}{% endif %} &middot; {{ f.severity }}</div>
+  </div>
+  {% endfor %}
+  {% elif pkg.verdict == "CLEAN" %}
+  <p class="hint" style="margin-top:16px">
+    Nothing flagged. It doesn't read SSH keys, cloud credentials or browser data,
+    and it doesn't run code on install.
+  </p>
+  {% endif %}
+
+{#- Status only, deliberately. This link is tracking, and it goes to whoever we
+    texted — the recruiter for a challenge, both sides for a submission. The
+    actions belong to the person who owns them: the package itself is opened
+    from the web app link in the candidate's own text, and solutions are sent
+    through /submit/{id}. Putting either button here showed the recruiter
+    controls that were never theirs. -#}
+</section>
+
+{% if submissions %}
+<section class="card">
+  <h2>Submissions</h2>
+  <table class="meta">
+    {% for s in submissions %}
+    <tr>
+      <td>{{ s.created_at[:16].replace("T", " ") }}</td>
+      <td><a href="{{ base_url }}/verify/{{ s.package_id }}">{{ s.status }}{% if s.verdict %} &middot; {{ s.verdict }}{% endif %}</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+
+<p class="hint" style="text-align:center">
+  Prefer the raw data? <a href="{{ base_url }}/verify/{{ pkg.package_id }}.json">View as JSON</a>
+</p>
+
+{% if pkg.status in ("received", "scanning") %}
+<script>setTimeout(function () { location.reload(); }, 5000);</script>
+{% endif %}
+{% endblock %}

@@ -15,17 +15,6 @@ to a real human through Terac.
 
 **One-liner:** verified handoff for take-home assessments, run by agents.
 
-## Hard constraints (hackathon rules — do not violate)
-
-- **Terac MCP is mandatory.** Human input must measurably improve the project, with
-  a demonstrable before/after. Our escalation path IS this — do not bolt on a
-  separate study.
-- **Stripe individual account** required to collect payments and be eligible for
-  Best Overall Agent-Run Company.
-- **Submissions lock 6:45 PM.** Freeze at 5:30 PM. Submit at 6:15 PM.
-- Agents must run the company: QA, setup, execution, verdicts, and customer
-  interaction happen without a human in the loop except via Terac escalation.
-
 ## System flow
 
 ```
@@ -62,10 +51,12 @@ app/
   ingest.py          unpack, hash, inventory files
   static_scan.py     rule-based detection (the core value)
   sandbox.py         Docker execution, network denied
-  agent.py           LLM verdict from scan reports
+  agent.py           LLM verdict + the tool-use loop (coordination agent)
+  tools.py           agent tools: contact_recruiter/candidate, verify_zip (stub)
+  workflow.py        agent-composed Linq messages, inbound reply routing
   escalate.py        Terac MCP call + result handling
   signing.py         Ed25519 sign and verify
-  notify.py          Linq messages
+  notify.py          Linq transport (agent messages + template fallback)
   pay.py             Stripe Checkout
   db.py              SQLite
 templates/

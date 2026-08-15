@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Submit your solution{% endblock %}
+{% block navtag %}Scanned before the company sees it{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>Submit your solution</h1>
+  <p class="tag">
+    We scan it for credential-stealing code, sign the result, and pass it to the
+    company. They see the same verdict you do.
+  </p>
+</div>
+
+<section class="card">
+  <form method="post" action="{{ base_url }}/submit/{{ pkg.package_id }}"
+        enctype="multipart/form-data">
+    <div class="field">
+      <label for="solution_url">Link to your solution</label>
+      <input id="solution_url" name="solution_url" type="url"
+             placeholder="https://github.com/you/solution" value="{{ prefill or '' }}">
+    </div>
+    <p class="hint">or upload it as a .zip</p>
+    <div class="field">
+      <input id="file" name="file" type="file" accept=".zip,application/zip">
+    </div>
+    <button class="btn primary" type="submit">Send it for scanning</button>
+    {% if error %}
+    <div class="status-msg err">{{ error }}</div>
+    {% endif %}
+  </form>
+</section>
+
+<section class="card">
+  <h2>What happens next</h2>
+  <ol class="steps">
+    <li>We scan what you sent, the same way we scanned the take-home you received.</li>
+    <li>The result is signed, so the company can confirm it independently.</li>
+    <li>They get a link to open it. You get a text either way.</li>
+  </ol>
+  <p class="hint" style="margin-top:14px">
+    You can also just reply to our text with a link — this page does the same thing.
+  </p>
+</section>
+{% endblock %}
