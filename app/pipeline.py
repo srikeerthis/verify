@@ -1,6 +1,6 @@
 """Orchestration. The only place that knows the order of operations.
 
-    intake  -> ingest -> scan -> judge -> [escalate] -> sign -> notify
+    intake  -> scan_client.scan (ingest+scan+judge+escalate, real) -> sign -> notify
 
 One rule holds the whole product together: **nothing is texted to anyone until a
 signature exists.** The message says "here is a verified package" and links to
@@ -10,6 +10,19 @@ function that both signs and notifies, and it does them in that order.
 Everything here is direction-agnostic. `to_candidate` is a challenge going out,
 `to_company` is a submission coming back; same code path, different `direction`,
 exactly as CLAUDE.md specifies.
+
+`process` used to call the local ingest/static_scan/agent/escalate stubs
+directly. It now calls out to scan_client, which hits a real scan service
+(OSV.dev CVE checks, secret/typosquat static scan, GPT verdict, Superserve
+sandbox execution, and — on an ambiguous verdict — a real Terac human
+escalation) and blocks until fully resolved. What comes back is always a final
+CLEAN or MALICIOUS; SUSPICIOUS is resolved on the other side before it ever
+reaches here. `_finalize` (signing + notify) is unchanged — the scan service
+never touches this repo's signing key.
+
+`on_human_verdict` and app/escalate.py are no longer called from this path —
+Terac escalation now happens inside the scan service — but are left in place
+rather than deleted, in case a caller still depends on them.
 """
 
 import json
@@ -17,7 +30,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app import agent, escalate, ingest, signing, static_scan
+from app import scan_client, signing
 from app.db import get_conn, get_package, set_status
 from app.notify import notify
 
@@ -83,10 +96,11 @@ def create_submission(*, parent_id: str, source_url: str) -> str:
 
 
 def process(package_id: str) -> None:
-    """Ingest, scan, judge, then either finalize or escalate.
+    """Run the real pipeline via scan_client, then finalize.
 
     Safe to run in a BackgroundTask. Never raises — a failure marks the package
-    `failed` and stops, rather than taking the request down with it.
+    `failed` and stops, rather than taking the request down with it. May block
+    for a while if the scan service escalates to Terac internally.
     """
     try:
         with get_conn() as conn:
@@ -97,40 +111,39 @@ def process(package_id: str) -> None:
             set_status(conn, package_id, "scanning")
 
         try:
-            ingested = ingest.fetch(pkg["source_url"])
-        except ingest.IngestError as exc:
-            log.warning("process %s: ingest failed — %s", package_id, exc)
+            result = scan_client.scan(package_id, pkg["source_url"], pkg["direction"])
+        except scan_client.ScanError as exc:
+            log.warning("process %s: scan failed — %s", package_id, exc)
             with get_conn() as conn:
                 set_status(conn, package_id, "failed")
             return
-
-        findings = static_scan.scan(ingested)
-        verdict = agent.judge(findings)
 
         with get_conn() as conn:
             conn.execute(
                 """
                 UPDATE packages
-                   SET sha256 = ?, verdict = ?, confidence = ?, findings_json = ?
+                   SET sha256 = ?, verdict = ?, confidence = ?, findings_json = ?,
+                       human_reviewed = ?, human_verdict = ?
                  WHERE package_id = ?
                 """,
-                (ingested.sha256, verdict.verdict, verdict.confidence,
-                 json.dumps([f.to_dict() for f in findings]), package_id),
+                (
+                    result["sha256"], result["verdict"], result["confidence"],
+                    json.dumps(result["findings"]),
+                    1 if result["humanReviewed"] else 0, result["humanVerdict"],
+                    package_id,
+                ),
             )
             conn.commit()
 
-        log.info("process %s: %s (%d findings)", package_id, verdict.verdict,
-                 len(findings))
+        log.info("process %s: %s (%d findings, human_reviewed=%s)", package_id,
+                 result["verdict"], len(result["findings"]), result["humanReviewed"])
 
-        # CLEAN and MALICIOUS finalize automatically. SUSPICIOUS goes to Terac
-        # and comes back through on_human_verdict.
-        if verdict.verdict == "SUSPICIOUS":
-            with get_conn() as conn:
-                set_status(conn, package_id, "escalated")
-            escalate.escalate(package_id, findings)
-            return
-
-        _finalize(package_id, verdict.verdict)
+        # scan_client always returns a resolved CLEAN or MALICIOUS — an
+        # ambiguous verdict is escalated to Terac and resolved on the other
+        # side before the call returns, so there's no separate "escalated"
+        # branch here anymore. `escalated` just controls whether _finalize
+        # sends the "a human looked at this" notification.
+        _finalize(package_id, result["verdict"], escalated=result["humanReviewed"])
 
     except BaseException:  # noqa: BLE001 — a background task must not die loudly
         log.exception("process %s crashed", package_id)

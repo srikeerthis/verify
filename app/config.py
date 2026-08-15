@@ -64,6 +64,13 @@ AGENT_MODEL = _get("AGENT_MODEL", "claude-sonnet-5")
 TERAC_API_KEY = _get("TERAC_API_KEY")
 TERAC_MCP_URL = _get("TERAC_MCP_URL")
 
+# --- scan service (scan_client.py) ---------------------------------------
+# The Node service that replaces ingest/static_scan/agent/escalate: real
+# OSV.dev CVE checks, secret/typosquat static scan, GPT verdict, Superserve
+# sandbox execution, and Terac human escalation on an ambiguous verdict.
+SCAN_SERVICE_URL = _get("SCAN_SERVICE_URL", "http://localhost:3000")
+SCAN_TIMEOUT_SECONDS = int(_get("SCAN_TIMEOUT_SECONDS", "300"))
+
 # --- stripe (pay.py) ----------------------------------------------------
 STRIPE_SECRET_KEY = _get("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = _get("STRIPE_PRICE_ID")
