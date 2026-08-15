@@ -51,10 +51,12 @@ app/
   ingest.py          unpack, hash, inventory files
   static_scan.py     rule-based detection (the core value)
   sandbox.py         Docker execution, network denied
-  agent.py           LLM verdict from scan reports
+  agent.py           LLM verdict + the tool-use loop (coordination agent)
+  tools.py           agent tools: contact_recruiter/candidate, verify_zip (stub)
+  workflow.py        agent-composed Linq messages, inbound reply routing
   escalate.py        Terac MCP call + result handling
   signing.py         Ed25519 sign and verify
-  notify.py          Linq messages
+  notify.py          Linq transport (agent messages + template fallback)
   pay.py             Stripe Checkout
   db.py              SQLite
 templates/

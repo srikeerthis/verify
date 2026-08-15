@@ -13,7 +13,7 @@ import logging
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from app import config, pipeline, signing, webhooks
+from app import config, pipeline, signing, tools, webhooks, workflow
 from app.db import get_conn, get_package, init_db
 from app.notify import E164
 
@@ -70,11 +70,16 @@ def create_package(
 
 @app.post("/webhooks/linq")
 async def linq_webhook(request: Request, background: BackgroundTasks) -> JSONResponse:
-    """Candidate replies land here.
+    """Candidate and recruiter replies land here.
 
     Always 200 once the signature checks out, even when we ignore the message.
     A 4xx or 5xx makes Linq retry for 25 minutes, and there is nothing to retry
     when a candidate texts "thanks!".
+
+    A link from a candidate with an open challenge is a submission — the
+    pipeline runs on it. Everything else goes to the coordination agent
+    (app/workflow.py), which reads the thread and decides whether to answer,
+    and can text either side.
     """
     body = await request.body()
 
@@ -98,27 +103,40 @@ async def linq_webhook(request: Request, background: BackgroundTasks) -> JSONRes
             return JSONResponse({"status": "ignored", "reason": "not an inbound text"})
 
         sender, text = inbound
+        ctx = webhooks.find_context(conn, sender)
+        if ctx is not None:
+            # Memory first, agent second: record what came in before anything
+            # replies to it, so the thread stays in order.
+            tools.record_inbound(sender, text, ctx[0]["package_id"], ctx[1])
+
         link = webhooks.extract_link(text)
-        if link is None:
-            webhooks.mark_handled(conn, event_id, event_type)
-            log.info("webhook: no link in reply from %s", sender)
-            return JSONResponse({"status": "ignored", "reason": "no link in message"})
+        submission_id = None
+        if (
+            link is not None
+            and ctx is not None
+            and ctx[1] == "candidate"
+            and (challenge := webhooks.find_open_challenge(conn, sender)) is not None
+        ):
+            submission_id = pipeline.create_submission(
+                parent_id=challenge["package_id"], source_url=link
+            )
 
-        challenge = webhooks.find_open_challenge(conn, sender)
-        if challenge is None:
-            webhooks.mark_handled(conn, event_id, event_type)
-            log.warning("webhook: link from %s matches no open challenge", sender)
-            return JSONResponse({"status": "ignored", "reason": "no open challenge"})
+        webhooks.mark_handled(conn, event_id, event_type, submission_id)
 
-    package_id = pipeline.create_submission(
-        parent_id=challenge["package_id"], source_url=link
-    )
+    if submission_id is not None:
+        background.add_task(pipeline.process, submission_id)
+        background.add_task(workflow.ack_submission, submission_id)
+        return JSONResponse({"status": "accepted", "package_id": submission_id})
 
-    with get_conn() as conn:
-        webhooks.mark_handled(conn, event_id, event_type, package_id)
+    if ctx is None and link is None:
+        log.info("webhook: text from %s matches no package", sender)
+        background.add_task(workflow.handle_inbound, sender, text)
+        return JSONResponse({"status": "handled_by_agent", "known_sender": False})
 
-    background.add_task(pipeline.process, package_id)
-    return JSONResponse({"status": "accepted", "package_id": package_id})
+    # Free text (question, nudge, "thanks") — the agent answers or stays quiet.
+    # A recruiter's link also lands here: the agent may run verify_zip on it.
+    background.add_task(workflow.handle_inbound, sender, text)
+    return JSONResponse({"status": "handled_by_agent", "known_sender": True})
 
 
 @app.get("/verify/{package_id}")

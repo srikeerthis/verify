@@ -1,11 +1,15 @@
 """Orchestration. The only place that knows the order of operations.
 
-    intake  -> ingest -> scan -> judge -> [escalate] -> sign -> notify
+    intake  -> ingest -> scan -> judge -> [escalate] -> sign -> announce
 
 One rule holds the whole product together: **nothing is texted to anyone until a
 signature exists.** The message says "here is a verified package" and links to
 proof — sending it before signing would make that a lie. `_finalize` is the only
-function that both signs and notifies, and it does them in that order.
+function that both signs and announces, and it does them in that order.
+
+Announcements are agent-composed (app/workflow.py): a prompt plus the package
+facts, with tools to text either side. The static templates survive as the
+fallback when no model key is set.
 
 Everything here is direction-agnostic. `to_candidate` is a challenge going out,
 `to_company` is a submission coming back; same code path, different `direction`,
@@ -17,9 +21,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app import agent, escalate, handoff, ingest, signing, static_scan
+from app import agent, escalate, handoff, ingest, signing, static_scan, workflow
 from app.db import get_conn, get_package, set_status
-from app.notify import notify
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ def create_challenge(
 
     log.info("intake %s: challenge from %s for %s", package_id, company_phone,
              candidate_phone)
-    notify("package_received", package_id)
+    workflow.announce("package_received", package_id)
     return package_id
 
 
@@ -183,12 +186,12 @@ def _finalize(package_id: str, verdict: str, *, escalated: bool = False) -> None
     if escalated:
         # The recruiter asked a human and deserves to hear the answer, whatever
         # it was. The delivery notification below still follows on CLEAN.
-        notify("escalation_resolved", package_id)
+        workflow.announce("escalation_resolved", package_id)
 
     if verdict == "MALICIOUS":
         with get_conn() as conn:
             set_status(conn, package_id, "blocked")
-        notify("package_blocked", package_id)
+        workflow.announce("package_blocked", package_id)
         return
 
     # Signature exists — publish to the web app so the text can carry a real
@@ -197,9 +200,9 @@ def _finalize(package_id: str, verdict: str, *, escalated: bool = False) -> None
     handoff.publish(package_id)
 
     if direction == "to_candidate":
-        notify("package_ready", package_id)
+        workflow.announce("package_ready", package_id)
     else:
-        notify("submission_verified", package_id)
+        workflow.announce("submission_verified", package_id)
 
     with get_conn() as conn:
         set_status(conn, package_id, "delivered")

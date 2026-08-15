@@ -158,3 +158,26 @@ def find_open_challenge(conn: sqlite3.Connection, phone: str) -> sqlite3.Row | N
         """,
         (phone,),
     ).fetchone()
+
+
+def find_context(conn: sqlite3.Connection, phone: str) -> tuple[sqlite3.Row, str] | None:
+    """The most recent package this phone belongs to, and which side they are.
+
+    Feeds the agent: it decides how to answer once it knows whether it is
+    talking to the recruiter or the candidate. Same two-open-packages
+    limitation as find_open_challenge.
+    """
+    row = conn.execute(
+        """
+        SELECT *, CASE WHEN company_phone = ? THEN 'recruiter'
+                       ELSE 'candidate' END AS role
+          FROM packages
+         WHERE company_phone = ? OR candidate_phone = ?
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT 1
+        """,
+        (phone, phone, phone),
+    ).fetchone()
+    if row is None:
+        return None
+    return row, row["role"]

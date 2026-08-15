@@ -64,6 +64,34 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     package_id  TEXT,
     received_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- The coordination agent's memory. Every SMS in or out lands here, so the
+-- agent can read the thread before replying and announce() can dedupe.
+CREATE TABLE IF NOT EXISTS agent_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    package_id  TEXT,               -- NULL for texts from unknown numbers
+    event       TEXT,               -- announce() dedupe key, NULL for free-form
+    phone       TEXT,               -- who sent it (inbound) / got it (outbound)
+    role        TEXT,               -- recruiter | candidate
+    direction   TEXT NOT NULL,      -- inbound | outbound
+    body        TEXT NOT NULL,
+    message_id  TEXT,               -- Linq message id, for outbound
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_messages_package
+    ON agent_messages (package_id, id);
+
+-- One row per agent turn, for the demo ("watch it think") and for debugging.
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    package_id  TEXT,
+    task        TEXT NOT NULL,
+    result      TEXT,
+    tool_calls  TEXT,               -- JSON array of {name, input}
+    fallback    INTEGER NOT NULL DEFAULT 0,  -- 1 when the stub path ran
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # Package lifecycle. Only DELIVERED and VERIFIED are terminal-happy.

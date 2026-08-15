@@ -57,8 +57,18 @@ TEST_COMPANY_PHONE = _get("TEST_COMPANY_PHONE")
 TEST_CANDIDATE_PHONE = _get("TEST_CANDIDATE_PHONE")
 
 # --- agent (agent.py) ---------------------------------------------------
+# Any Anthropic-compatible /v1/messages gateway works: set ANTHROPIC_API_KEY
+# + ANTHROPIC_API_URL (+ AGENT_MODEL) and the tool loop runs there. Default
+# is Anthropic direct; .env points at Pioneer with DeepSeek-V4-Flash.
 ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY")
 AGENT_MODEL = _get("AGENT_MODEL", "claude-sonnet-5")
+ANTHROPIC_API_URL = _get("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
+ANTHROPIC_API_VERSION = _get("ANTHROPIC_API_VERSION", "2023-06-01")
+# Tool-use loop knobs. Six turns is enough for verify_zip + one message.
+AGENT_MAX_TOKENS = int(_get("AGENT_MAX_TOKENS", "1024"))
+AGENT_MAX_TURNS = int(_get("AGENT_MAX_TURNS", "6"))
+# How many prior SMS the agent sees as conversation history per run.
+AGENT_HISTORY_TURNS = int(_get("AGENT_HISTORY_TURNS", "10"))
 
 # --- terac (escalate.py) ------------------------------------------------
 TERAC_API_KEY = _get("TERAC_API_KEY")

@@ -76,6 +76,16 @@ _env = Environment(
 )
 
 
+def send_raw(recipient: str, body: str, idempotency_key: str) -> str:
+    """Send arbitrary text through Linq. Returns the Linq message id.
+
+    The agent tools (app/tools.py) compose their own messages, so they need
+    the pipe without the template/event bookkeeping `notify` does. Raises
+    NotConfigured / LinqError — callers handle both.
+    """
+    return _send(recipient, body, idempotency_key)
+
+
 def _send(recipient: str, body: str, idempotency_key: str) -> str:
     """The only Linq-specific code in the repo. Returns the Linq message id.
 
