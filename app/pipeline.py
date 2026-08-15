@@ -23,18 +23,42 @@ never touches this repo's signing key.
 `on_human_verdict` and app/escalate.py are no longer called from this path —
 Terac escalation now happens inside the scan service — but are left in place
 rather than deleted, in case a caller still depends on them.
+
+For zip sources, `process` also runs app/sandbox_scan.py — a second, native
+Superserve invocation, independent of the scan service's own internal sandbox
+run. Findings from it are merged into findings_json before it's stored;
+best-effort, never blocks or overrides the verdict already returned by
+scan_client.
 """
 
 import json
 import logging
+import urllib.error
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-from app import scan_client, signing
+from app import sandbox_scan, scan_client, signing
 from app.db import get_conn, get_package, set_status
 from app.notify import notify
 
 log = logging.getLogger(__name__)
+
+
+def _download_if_zip(source_url: str) -> bytes | None:
+    """Downloads source_url and returns the bytes if it looks like a zip
+    (magic bytes or .zip suffix), else None. Best-effort — any failure here
+    just skips the native sandbox scan rather than failing the pipeline.
+    """
+    try:
+        with urllib.request.urlopen(source_url, timeout=30) as resp:
+            data = resp.read()
+    except (urllib.error.URLError, TimeoutError) as exc:
+        log.warning("sandbox_scan: could not download %s — %s", source_url, exc)
+        return None
+
+    looks_like_zip = source_url.endswith(".zip") or data[:2] == b"PK"
+    return data if looks_like_zip else None
 
 
 def create_challenge(
@@ -118,6 +142,24 @@ def process(package_id: str) -> None:
                 set_status(conn, package_id, "failed")
             return
 
+        findings = result["findings"]
+
+        # Independent, native dynamic scan in this repo's own code (the scan
+        # service already ran its own sandbox scan internally as part of
+        # `result`; this is a second, visible Superserve invocation). Only
+        # runs for zip sources today; best-effort — never blocks the verdict
+        # already returned by scan_client.
+        zip_bytes = _download_if_zip(pkg["source_url"])
+        if zip_bytes is not None:
+            try:
+                sandbox_findings, run_summary = sandbox_scan.run(zip_bytes)
+                findings = findings + [f.to_dict() for f in sandbox_findings]
+                log.info("process %s: native sandbox scan — install=%s build=%s test=%s (%d findings)",
+                         package_id, run_summary["install"], run_summary["build"],
+                         run_summary["test"], len(sandbox_findings))
+            except sandbox_scan.SandboxScanError as exc:
+                log.warning("process %s: native sandbox scan skipped — %s", package_id, exc)
+
         with get_conn() as conn:
             conn.execute(
                 """
@@ -128,7 +170,7 @@ def process(package_id: str) -> None:
                 """,
                 (
                     result["sha256"], result["verdict"], result["confidence"],
-                    json.dumps(result["findings"]),
+                    json.dumps(findings),
                     1 if result["humanReviewed"] else 0, result["humanVerdict"],
                     package_id,
                 ),
@@ -136,7 +178,7 @@ def process(package_id: str) -> None:
             conn.commit()
 
         log.info("process %s: %s (%d findings, human_reviewed=%s)", package_id,
-                 result["verdict"], len(result["findings"]), result["humanReviewed"])
+                 result["verdict"], len(findings), result["humanReviewed"])
 
         # scan_client always returns a resolved CLEAN or MALICIOUS — an
         # ambiguous verdict is escalated to Terac and resolved on the other

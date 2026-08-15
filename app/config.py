@@ -71,6 +71,12 @@ TERAC_MCP_URL = _get("TERAC_MCP_URL")
 SCAN_SERVICE_URL = _get("SCAN_SERVICE_URL", "http://localhost:3000")
 SCAN_TIMEOUT_SECONDS = int(_get("SCAN_TIMEOUT_SECONDS", "300"))
 
+# --- superserve (sandbox_scan.py) ----------------------------------------
+# The `superserve` Python SDK reads this from the environment itself; also
+# exposed here so sandbox_scan.py can check it's set before creating a
+# sandbox, rather than failing partway through a run.
+SUPERSERVE_API_KEY = _get("SUPERSERVE_API_KEY")
+
 # --- stripe (pay.py) ----------------------------------------------------
 STRIPE_SECRET_KEY = _get("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = _get("STRIPE_PRICE_ID")
