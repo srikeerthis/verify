@@ -140,7 +140,7 @@ function packageLinks(req, meta) {
   };
 }
 
-async function signUpload(req, res, email) {
+async function signUpload(req, res, email, { toPipeline = false } = {}) {
   const tmp = req.file?.path;
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded. Send multipart/form-data with a "file" field.' });
@@ -160,9 +160,35 @@ async function signUpload(req, res, email) {
       return res.status(400).json({ error: 'This does not look like a zip file (missing PK signature).' });
     }
 
+    const companyPhone = String(req.body?.company_phone || '').trim();
+    const candidatePhone = String(req.body?.candidate_phone || '').trim();
+    if (toPipeline) {
+      for (const [label, value] of [['Your', companyPhone], ["The candidate's", candidatePhone]]) {
+        if (!E164.test(value)) {
+          await fsp.rm(tmp, { force: true });
+          return res.status(400).json({ error: `${label} number needs the country code, like +15551234567.` });
+        }
+      }
+    }
+
     const { privateKey, publicKeyPem } = getOrCreateKeyPair(email);
     const meta = await createPackage({ email, originalName, tmpPath: tmp, privateKey, publicKeyPem });
-    res.status(201).json(packageLinks(req, meta));
+    const links = packageLinks(req, meta);
+
+    if (!toPipeline) return res.status(201).json(links);
+
+    // The package is signed and safe either way — a pipeline outage must not
+    // cost the recruiter their upload, so this failure is reported, not fatal.
+    try {
+      const accepted = await sendToPipeline({ links, email, companyPhone, candidatePhone });
+      res.status(201).json({ ...links, pipeline: accepted });
+    } catch (err) {
+      console.error('Pipeline handoff failed:', err);
+      res.status(201).json({
+        ...links,
+        pipelineError: 'Signed, but the scan pipeline could not be reached — nobody was texted.',
+      });
+    }
   } catch (err) {
     console.error('Package upload failed:', err);
     if (tmp) await fsp.rm(tmp, { force: true }).catch(() => {});
@@ -191,9 +217,48 @@ app.post('/api/integration/packages', requireApiKey, upload.single('file'), asyn
   await signUpload(req, res, email);
 });
 
+// The recruiter's own upload — this is the one that kicks off the SMS flow.
+// The integration route above deliberately does not, or the pipeline
+// publishing a scanned package back to us would start an endless loop.
 app.post('/api/packages', requireAuth, upload.single('file'), async (req, res) => {
-  await signUpload(req, res, req.userEmail);
+  await signUpload(req, res, req.userEmail, { toPipeline: true });
 });
+
+// --- hand a signed package to the scan pipeline ----------------------------
+// The web app signs; the pipeline scans and does all the texting. We pass the
+// download URL as the source so the pipeline fetches exactly the bytes we
+// signed, plus the links we already minted so it does not publish a duplicate
+// copy back to us.
+const PIPELINE_URL = process.env.PIPELINE_URL || '';
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+async function sendToPipeline({ links, email, companyPhone, candidatePhone }) {
+  if (!PIPELINE_URL) {
+    console.warn('PIPELINE_URL not set — package signed but nobody will be texted.');
+    return;
+  }
+  const form = new URLSearchParams({
+    source_url: links.downloadUrl,
+    company_email: email,
+    company_phone: companyPhone,
+    candidate_phone: candidatePhone,
+    webapp_id: links.id,
+    webapp_verify_url: links.verifyUrl,
+    webapp_download_url: links.downloadUrl,
+    webapp_signature_url: links.signatureUrl,
+    webapp_publickey_url: links.publicKeyUrl,
+  });
+
+  const res = await fetch(`${PIPELINE_URL.replace(/\/$/, '')}/packages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`pipeline returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return res.json();
+}
 
 app.get('/api/packages/:id', async (req, res) => {
   const meta = await getPackage(req.params.id);

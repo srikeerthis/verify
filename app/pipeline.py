@@ -33,21 +33,32 @@ def create_challenge(
     company_email: str,
     company_phone: str,
     candidate_phone: str,
+    webapp: dict | None = None,
 ) -> str:
     """Recruiter intake. Called by the frontend form. Returns the package id.
 
     Writes the row and returns immediately — run `process` in a background task
     so the form response is not waiting on a scan.
+
+    `webapp` carries links the web app already minted when it signed the upload.
+    Passing them means handoff.publish sees the package as already published and
+    skips it — otherwise we would download our own zip and upload a duplicate
+    copy straight back.
     """
     package_id = str(uuid.uuid4())
+    webapp = webapp or {}
     with get_conn() as conn:
         conn.execute(
             """
             INSERT INTO packages (package_id, direction, source_url, status,
-                                  company_email, company_phone, candidate_phone)
-            VALUES (?, 'to_candidate', ?, 'received', ?, ?, ?)
+                                  company_email, company_phone, candidate_phone,
+                                  webapp_id, webapp_verify_url, webapp_download_url,
+                                  webapp_signature_url, webapp_publickey_url)
+            VALUES (?, 'to_candidate', ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (package_id, source_url, company_email, company_phone, candidate_phone),
+            (package_id, source_url, company_email, company_phone, candidate_phone,
+             webapp.get("id"), webapp.get("verify_url"), webapp.get("download_url"),
+             webapp.get("signature_url"), webapp.get("publickey_url")),
         )
         conn.commit()
 

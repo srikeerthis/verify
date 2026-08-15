@@ -35,12 +35,21 @@ def create_package(
     company_email: str = Form(...),
     company_phone: str = Form(...),
     candidate_phone: str = Form(...),
+    webapp_id: str = Form(""),
+    webapp_verify_url: str = Form(""),
+    webapp_download_url: str = Form(""),
+    webapp_signature_url: str = Form(""),
+    webapp_publickey_url: str = Form(""),
 ) -> JSONResponse:
     """Recruiter intake. Accepts a form post or JSON with the same field names.
 
     Returns as soon as the row is written; scanning runs in the background. The
     candidate is texted only once the package is scanned and signed, so a 200
     here means "accepted", not "delivered".
+
+    The webapp_* fields are optional and only sent by the web app, which has
+    already signed the upload and minted these links. Anyone posting a bare
+    source_url still works exactly as before.
     """
     for label, phone in (("company_phone", company_phone),
                          ("candidate_phone", candidate_phone)):
@@ -55,6 +64,13 @@ def create_package(
         company_email=company_email,
         company_phone=company_phone,
         candidate_phone=candidate_phone,
+        webapp={
+            "id": webapp_id,
+            "verify_url": webapp_verify_url,
+            "download_url": webapp_download_url,
+            "signature_url": webapp_signature_url,
+            "publickey_url": webapp_publickey_url,
+        } if webapp_verify_url else None,
     )
     background.add_task(pipeline.process, package_id)
 

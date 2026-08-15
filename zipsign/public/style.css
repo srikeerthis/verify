@@ -129,6 +129,10 @@ h2 { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight
 .row { display: flex; gap: 10px; }
 .row.right { justify-content: flex-end; margin-top: 16px; }
 
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field:last-of-type { margin-bottom: 0; }
+.field label { color: var(--muted); font-size: 13.5px; }
+
 input {
   flex: 1;
   min-width: 0;

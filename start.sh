@@ -69,7 +69,8 @@ echo "  pipeline (FastAPI)  http://localhost:$API_PORT   POST /packages"
 echo "  Ctrl-C stops both"
 echo
 
-INTEGRATION_API_KEY="$INTEGRATION_KEY" PORT="$WEB_PORT" node zipsign/server.js &
+INTEGRATION_API_KEY="$INTEGRATION_KEY" PORT="$WEB_PORT" \
+  PIPELINE_URL="http://127.0.0.1:$API_PORT" node zipsign/server.js &
 WEB_PID=$!
 .venv/bin/uvicorn app.main:app --port "$API_PORT" &
 API_PID=$!

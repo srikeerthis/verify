@@ -55,7 +55,24 @@ function clearFile() {
   signBtn.disabled = true;
 }
 
-function upload(f) {
+// Same rule the pipeline enforces server-side: E.164, no spaces or dashes.
+// Catching it here saves a round trip and explains itself better than a 422.
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+function phones() {
+  const company = $('#companyPhone').value.trim();
+  const candidate = $('#candidatePhone').value.trim();
+  for (const [label, value] of [['Your', company], ["The candidate's", candidate]]) {
+    if (!E164.test(value)) {
+      showStatus($('#phoneStatus'), `${label} number needs the country code, like +15551234567.`, false);
+      return null;
+    }
+  }
+  $('#phoneStatus').hidden = true;
+  return { company, candidate };
+}
+
+function upload(f, to) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/packages');
@@ -75,20 +92,26 @@ function upload(f) {
     xhr.onerror = () => reject(new Error('Network error during upload.'));
     const fd = new FormData();
     fd.append('file', f, f.name);
+    // The server signs first, then hands these to the scan pipeline, which is
+    // what actually texts the candidate.
+    fd.append('company_phone', to.company);
+    fd.append('candidate_phone', to.candidate);
     xhr.send(fd);
   });
 }
 
 async function signAndUpload() {
   if (!file) return;
+  const to = phones();
+  if (!to) return;
   signBtn.disabled = true;
   progress.hidden = false;
   progressBar.style.width = '0%';
   showStatus(signStatus, 'Uploading and signing\u2026', true);
   try {
-    const pkg = await upload(file);
+    const pkg = await upload(file, to);
     progressBar.style.width = '100%';
-    showStatus(signStatus, 'Signed. Taking you to your drop-off status\u2026', true);
+    showStatus(signStatus, 'Signed and sent for scanning. We\u2019ll text you both\u2026', true);
     window.location.href = `/done/${pkg.id}`;
   } catch (err) {
     showStatus(signStatus, err.message, false);

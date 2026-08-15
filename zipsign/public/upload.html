@@ -36,7 +36,23 @@
     </section>
 
     <section class="card step">
-      <h2><span class="num">3</span> Drop your package</h2>
+      <h2><span class="num">3</span> Who is it for?</h2>
+      <p class="hint">We text both of you as the package moves. Include the country code.</p>
+      <div class="field">
+        <label for="companyPhone">Your mobile</label>
+        <input id="companyPhone" type="tel" inputmode="tel" autocomplete="tel"
+               placeholder="+15551234567" required>
+      </div>
+      <div class="field">
+        <label for="candidatePhone">Candidate's mobile</label>
+        <input id="candidatePhone" type="tel" inputmode="tel"
+               placeholder="+15559876543" required>
+      </div>
+      <p class="status" id="phoneStatus" hidden></p>
+    </section>
+
+    <section class="card step">
+      <h2><span class="num">4</span> Drop your package</h2>
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop a zip file">
         <p class="dz-main">Drag a .zip here</p>
         <p class="dz-sub">or click to browse &middot; up to 100 MB</p>
@@ -49,7 +65,7 @@
       </div>
       <div id="progress" class="progress" hidden><div id="progressBar"></div></div>
       <div class="row right">
-        <button id="signBtn" class="btn primary" disabled>Sign &amp; upload</button>
+        <button id="signBtn" class="btn primary" disabled>Sign &amp; send</button>
       </div>
       <p class="status" id="signStatus" hidden></p>
     </section>
