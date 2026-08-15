@@ -1,0 +1,18 @@
+{
+  "name": "verify",
+  "version": "1.0.0",
+  "description": "Upload a zip, verify your email with an OTP, get an ed25519-signed package with a shareable download/verify link.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^6.9.16"
+  }
+}

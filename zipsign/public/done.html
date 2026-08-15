@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify — drop-off received</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        Verify
+      </a>
+      <span class="nav-tag">Secure package signing</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <div class="done-badge">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h1 class="headline">Drop-off received</h1>
+      <p class="tag">A team of AI agents is handling the secure coding challenge drop-off for you.<br>You'll get a text message once the candidate has completed the challenge.</p>
+    </div>
+
+    <section class="card">
+      <h2>What happens next</h2>
+      <ul class="timeline">
+        <li class="tl-item">
+          <span class="tl-icon done">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+          <span class="tl-text"><b>Drop-off received</b><small id="pkgLine">Your email is verified and the drop-off is confirmed.</small></span>
+        </li>
+        <li class="tl-item">
+          <span class="tl-icon active"><span class="spinner"></span></span>
+          <span class="tl-text"><b>AI agents engaged</b><small>Your package is queued and being prepared for the candidate.</small></span>
+        </li>
+        <li class="tl-item">
+          <span class="tl-icon pending">3</span>
+          <span class="tl-text"><b>Candidate taking the challenge</b><small>We'll monitor progress and keep everything verified.</small></span>
+        </li>
+        <li class="tl-item">
+          <span class="tl-icon pending">4</span>
+          <span class="tl-text"><b>You get a text message</b><small>The moment the candidate completes the challenge.</small></span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card" id="pkgCard" hidden>
+      <h2>Your package</h2>
+      <div class="result">
+        <div class="linkrow">
+          <span class="label">Verify link</span>
+          <a id="verifyLink" href="/" target="_blank" rel="noopener" hidden></a>
+          <button id="copyLink" class="btn tiny" type="button" hidden>Copy</button>
+        </div>
+        <p class="hint" id="shareHint" hidden>Share this link with the candidate so they can download the package and check its signature.</p>
+        <p class="hint" id="loadHint"><span class="spinner"></span></p>
+      </div>
+    </section>
+
+    <p class="footer">Verify &middot; ed25519 signatures &middot; recipients can confirm every file they receive</p>
+  </main>
+  <script src="/done.js"></script>
+</body>
+</html>

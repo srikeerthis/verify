@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify — upload your package</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        Verify
+      </a>
+      <span class="nav-tag">Secure package signing</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1 class="headline">Upload to sign</h1>
+      <p class="tag">Your email is confirmed and your signing key is ready.</p>
+    </div>
+
+    <section class="card">
+      <h2>Signing as</h2>
+      <p id="who" class="who"><span class="spinner"></span></p>
+      <p class="hint">Key fingerprint: <code class="hash" id="fp"></code></p>
+      <p class="hint">This page is your private upload link &mdash; valid for 1 hour. Anyone with it can upload as you, so don't share it.</p>
+    </section>
+
+    <section class="card step">
+      <h2><span class="num">3</span> Drop your package</h2>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop a zip file">
+        <p class="dz-main">Drag a .zip here</p>
+        <p class="dz-sub">or click to browse &middot; up to 100 MB</p>
+        <input id="fileInput" type="file" accept=".zip,application/zip" hidden>
+      </div>
+      <div id="fileInfo" class="file-info" hidden>
+        <span id="fileName"></span>
+        <span id="fileSize" class="muted"></span>
+        <button id="clearFile" class="link" type="button">remove</button>
+      </div>
+      <div id="progress" class="progress" hidden><div id="progressBar"></div></div>
+      <div class="row right">
+        <button id="signBtn" class="btn primary" disabled>Sign &amp; upload</button>
+      </div>
+      <p class="status" id="signStatus" hidden></p>
+    </section>
+
+    <p class="footer">Verify &middot; ed25519 signatures &middot; recipients can confirm every file they receive</p>
+  </main>
+  <script src="/upload.js"></script>
+</body>
+</html>
