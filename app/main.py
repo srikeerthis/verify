@@ -11,9 +11,9 @@ Everything else is the verify surface from CLAUDE.md.
 import logging
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
-from app import config, pipeline, signing, webhooks
+from app import config, escalate, pipeline, signing, webhooks
 from app.db import get_conn, get_package, init_db
 from app.notify import E164
 
@@ -143,6 +143,45 @@ def verify_package(package_id: str) -> JSONResponse:
             "signed_at": pkg["signed_at"],
         }
     )
+
+
+@app.get("/review/{package_id}", response_class=HTMLResponse)
+def review_page(package_id: str) -> str:
+    """Where a Terac-recruited reviewer lands (escalate.py's task_url). Shows
+    only the snippet/file/why per finding, per CLAUDE.md — never the whole
+    package.
+    """
+    findings = escalate.pending_reviews.get(package_id)
+    if findings is None:
+        return "<p>No pending review for this package (it may already be decided).</p>"
+
+    rows = "".join(
+        f"<tr><td>{f.severity}</td><td>{f.rule}</td><td>{f.file}</td>"
+        f"<td><pre>{f.snippet}</pre></td><td>{f.why}</td></tr>"
+        for f in findings
+    )
+    return f"""<!doctype html>
+<html><head><title>Verify — Review</title></head>
+<body style="font-family: sans-serif; max-width: 800px; margin: 2rem auto;">
+  <h1>Review a flagged submission</h1>
+  <table border="1" cellpadding="6" style="border-collapse: collapse; width: 100%;">
+    <tr><th>Severity</th><th>Rule</th><th>File</th><th>Snippet</th><th>Why</th></tr>
+    {rows}
+  </table>
+  <form method="POST" action="/review/{package_id}/decision" style="margin-top: 1rem;">
+    <label><input type="radio" name="human_verdict" value="CLEAN" required> Safe — deliver it</label><br/>
+    <label><input type="radio" name="human_verdict" value="MALICIOUS"> Malicious — block it</label><br/>
+    <button type="submit">Submit decision</button>
+  </form>
+</body></html>"""
+
+
+@app.post("/review/{package_id}/decision")
+def review_decision(package_id: str, human_verdict: str = Form(...)) -> JSONResponse:
+    if human_verdict not in ("CLEAN", "MALICIOUS"):
+        raise HTTPException(422, "human_verdict must be CLEAN or MALICIOUS")
+    escalate.resolve(package_id, human_verdict)
+    return JSONResponse({"status": "recorded"})
 
 
 @app.get("/pubkey", response_class=PlainTextResponse)

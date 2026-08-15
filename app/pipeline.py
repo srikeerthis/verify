@@ -1,6 +1,6 @@
 """Orchestration. The only place that knows the order of operations.
 
-    intake  -> scan_client.scan (ingest+scan+judge+escalate, real) -> sign -> notify
+    intake -> ingest -> scan (static + LLM review) -> judge -> [escalate] -> sign -> notify
 
 One rule holds the whole product together: **nothing is texted to anyone until a
 signature exists.** The message says "here is a verified package" and links to
@@ -11,54 +11,22 @@ Everything here is direction-agnostic. `to_candidate` is a challenge going out,
 `to_company` is a submission coming back; same code path, different `direction`,
 exactly as CLAUDE.md specifies.
 
-`process` used to call the local ingest/static_scan/agent/escalate stubs
-directly. It now calls out to scan_client, which hits a real scan service
-(OSV.dev CVE checks, secret/typosquat static scan, GPT verdict, Superserve
-sandbox execution, and — on an ambiguous verdict — a real Terac human
-escalation) and blocks until fully resolved. What comes back is always a final
-CLEAN or MALICIOUS; SUSPICIOUS is resolved on the other side before it ever
-reaches here. `_finalize` (signing + notify) is unchanged — the scan service
-never touches this repo's signing key.
-
-`on_human_verdict` and app/escalate.py are no longer called from this path —
-Terac escalation now happens inside the scan service — but are left in place
-rather than deleted, in case a caller still depends on them.
-
-For zip sources, `process` also runs app/sandbox_scan.py — a second, native
-Superserve invocation, independent of the scan service's own internal sandbox
-run. Findings from it are merged into findings_json before it's stored;
-best-effort, never blocks or overrides the verdict already returned by
-scan_client.
+Fully self-contained: ingest, static_scan (secrets + typosquats + OSV.dev CVEs
++ LLM code review), agent (LLM verdict), sandbox_scan (real Superserve dynamic
+execution, zip sources only), and escalate (real Terac human review) all run
+in this repo's own process — no external scan service.
 """
 
 import json
 import logging
-import urllib.error
-import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-from app import sandbox_scan, scan_client, signing
+from app import agent, escalate, ingest, sandbox_scan, signing, static_scan
 from app.db import get_conn, get_package, set_status
 from app.notify import notify
 
 log = logging.getLogger(__name__)
-
-
-def _download_if_zip(source_url: str) -> bytes | None:
-    """Downloads source_url and returns the bytes if it looks like a zip
-    (magic bytes or .zip suffix), else None. Best-effort — any failure here
-    just skips the native sandbox scan rather than failing the pipeline.
-    """
-    try:
-        with urllib.request.urlopen(source_url, timeout=30) as resp:
-            data = resp.read()
-    except (urllib.error.URLError, TimeoutError) as exc:
-        log.warning("sandbox_scan: could not download %s — %s", source_url, exc)
-        return None
-
-    looks_like_zip = source_url.endswith(".zip") or data[:2] == b"PK"
-    return data if looks_like_zip else None
 
 
 def create_challenge(
@@ -120,11 +88,10 @@ def create_submission(*, parent_id: str, source_url: str) -> str:
 
 
 def process(package_id: str) -> None:
-    """Run the real pipeline via scan_client, then finalize.
+    """Ingest, scan (static + dynamic), judge, then either finalize or escalate.
 
     Safe to run in a BackgroundTask. Never raises — a failure marks the package
-    `failed` and stops, rather than taking the request down with it. May block
-    for a while if the scan service escalates to Terac internally.
+    `failed` and stops, rather than taking the request down with it.
     """
     try:
         with get_conn() as conn:
@@ -135,57 +102,60 @@ def process(package_id: str) -> None:
             set_status(conn, package_id, "scanning")
 
         try:
-            result = scan_client.scan(package_id, pkg["source_url"], pkg["direction"])
-        except scan_client.ScanError as exc:
-            log.warning("process %s: scan failed — %s", package_id, exc)
+            ingested = ingest.fetch(pkg["source_url"])
+        except ingest.IngestError as exc:
+            log.warning("process %s: ingest failed — %s", package_id, exc)
             with get_conn() as conn:
                 set_status(conn, package_id, "failed")
             return
 
-        findings = result["findings"]
+        try:
+            findings = static_scan.scan(ingested)
 
-        # Independent, native dynamic scan in this repo's own code (the scan
-        # service already ran its own sandbox scan internally as part of
-        # `result`; this is a second, visible Superserve invocation). Only
-        # runs for zip sources today; best-effort — never blocks the verdict
-        # already returned by scan_client.
-        zip_bytes = _download_if_zip(pkg["source_url"])
-        if zip_bytes is not None:
-            try:
-                sandbox_findings, run_summary = sandbox_scan.run(zip_bytes)
-                findings = findings + [f.to_dict() for f in sandbox_findings]
-                log.info("process %s: native sandbox scan — install=%s build=%s test=%s (%d findings)",
-                         package_id, run_summary["install"], run_summary["build"],
-                         run_summary["test"], len(sandbox_findings))
-            except sandbox_scan.SandboxScanError as exc:
-                log.warning("process %s: native sandbox scan skipped — %s", package_id, exc)
+            # Dynamic scan only covers zip sources today (see sandbox_scan.py).
+            # ingest.fetch already unpacked the source locally either way;
+            # for a zip source we just re-pack what's on disk rather than
+            # re-download, since sandbox_scan.run() takes a zip buffer.
+            if pkg["source_url"].endswith(".zip"):
+                try:
+                    zip_bytes = _rezip(ingested)
+                    sandbox_findings, run_summary = sandbox_scan.run(zip_bytes)
+                    findings += sandbox_findings
+                    log.info("process %s: sandbox scan — install=%s build=%s test=%s (%d findings)",
+                             package_id, run_summary["install"], run_summary["build"],
+                             run_summary["test"], len(sandbox_findings))
+                except sandbox_scan.SandboxScanError as exc:
+                    log.warning("process %s: sandbox scan skipped — %s", package_id, exc)
+        finally:
+            if ingested.cleanup:
+                ingested.cleanup()
+
+        verdict = agent.judge(findings)
 
         with get_conn() as conn:
             conn.execute(
                 """
                 UPDATE packages
-                   SET sha256 = ?, verdict = ?, confidence = ?, findings_json = ?,
-                       human_reviewed = ?, human_verdict = ?
+                   SET sha256 = ?, verdict = ?, confidence = ?, findings_json = ?
                  WHERE package_id = ?
                 """,
-                (
-                    result["sha256"], result["verdict"], result["confidence"],
-                    json.dumps(findings),
-                    1 if result["humanReviewed"] else 0, result["humanVerdict"],
-                    package_id,
-                ),
+                (ingested.sha256, verdict.verdict, verdict.confidence,
+                 json.dumps([f.to_dict() for f in findings]), package_id),
             )
             conn.commit()
 
-        log.info("process %s: %s (%d findings, human_reviewed=%s)", package_id,
-                 result["verdict"], len(findings), result["humanReviewed"])
+        log.info("process %s: %s (%d findings)", package_id, verdict.verdict,
+                 len(findings))
 
-        # scan_client always returns a resolved CLEAN or MALICIOUS — an
-        # ambiguous verdict is escalated to Terac and resolved on the other
-        # side before the call returns, so there's no separate "escalated"
-        # branch here anymore. `escalated` just controls whether _finalize
-        # sends the "a human looked at this" notification.
-        _finalize(package_id, result["verdict"], escalated=result["humanReviewed"])
+        # CLEAN and MALICIOUS finalize automatically. SUSPICIOUS goes to Terac
+        # and comes back through on_human_verdict.
+        if verdict.verdict == "SUSPICIOUS":
+            with get_conn() as conn:
+                set_status(conn, package_id, "escalated")
+            escalate.escalate(package_id, findings)
+            return
+
+        _finalize(package_id, verdict.verdict)
 
     except BaseException:  # noqa: BLE001 — a background task must not die loudly
         log.exception("process %s crashed", package_id)
@@ -194,6 +164,20 @@ def process(package_id: str) -> None:
                 set_status(conn, package_id, "failed")
         except Exception:  # noqa: BLE001
             pass
+
+
+def _rezip(ingested) -> bytes:  # type: ignore[no-untyped-def]
+    """Re-packs the already-unpacked source tree into zip bytes for
+    sandbox_scan.run(), which expects a zip buffer (it's built to accept
+    exactly what a recruiter/candidate would upload)."""
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for rel_path in ingested.files:
+            zf.write(ingested.root / rel_path, rel_path)
+    return buf.getvalue()
 
 
 def on_human_verdict(package_id: str, human_verdict: str) -> None:

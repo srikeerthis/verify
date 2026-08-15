@@ -57,19 +57,16 @@ TEST_COMPANY_PHONE = _get("TEST_COMPANY_PHONE")
 TEST_CANDIDATE_PHONE = _get("TEST_CANDIDATE_PHONE")
 
 # --- agent (agent.py) ---------------------------------------------------
-ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY")
-AGENT_MODEL = _get("AGENT_MODEL", "claude-sonnet-5")
+# Using OpenAI (the key actually available), not Anthropic. Swap agent.py's
+# client call if ANTHROPIC_API_KEY is what ends up configured instead.
+OPENAI_API_KEY = _get("OPENAI_API_KEY")
+AGENT_MODEL = _get("AGENT_MODEL", "gpt-4o-mini")
 
 # --- terac (escalate.py) ------------------------------------------------
 TERAC_API_KEY = _get("TERAC_API_KEY")
-TERAC_MCP_URL = _get("TERAC_MCP_URL")
-
-# --- scan service (scan_client.py) ---------------------------------------
-# The Node service that replaces ingest/static_scan/agent/escalate: real
-# OSV.dev CVE checks, secret/typosquat static scan, GPT verdict, Superserve
-# sandbox execution, and Terac human escalation on an ambiguous verdict.
-SCAN_SERVICE_URL = _get("SCAN_SERVICE_URL", "http://localhost:3000")
-SCAN_TIMEOUT_SECONDS = int(_get("SCAN_TIMEOUT_SECONDS", "300"))
+# Optional: reuse an existing Terac project instead of creating one on first
+# escalation.
+TERAC_PROJECT_ID = _get("TERAC_PROJECT_ID")
 
 # --- superserve (sandbox_scan.py) ----------------------------------------
 # The `superserve` Python SDK reads this from the environment itself; also
