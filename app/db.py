@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     recipient   TEXT,
     status      TEXT NOT NULL,           -- sent | skipped | failed
     error       TEXT,
+    message_id  TEXT,                    -- Linq message id, once sent
     sent_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (package_id, event)
 );
