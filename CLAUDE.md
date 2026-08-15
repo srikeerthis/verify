@@ -15,17 +15,6 @@ to a real human through Terac.
 
 **One-liner:** verified handoff for take-home assessments, run by agents.
 
-## Hard constraints (hackathon rules — do not violate)
-
-- **Terac MCP is mandatory.** Human input must measurably improve the project, with
-  a demonstrable before/after. Our escalation path IS this — do not bolt on a
-  separate study.
-- **Stripe individual account** required to collect payments and be eligible for
-  Best Overall Agent-Run Company.
-- **Submissions lock 6:45 PM.** Freeze at 5:30 PM. Submit at 6:15 PM.
-- Agents must run the company: QA, setup, execution, verdicts, and customer
-  interaction happen without a human in the loop except via Terac escalation.
-
 ## System flow
 
 ```
