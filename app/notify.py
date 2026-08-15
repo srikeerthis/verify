@@ -10,19 +10,20 @@ runs green.
 """
 
 import logging
-import os
 import sqlite3
 from typing import Literal
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from app import config
 from app.db import get_conn
 
 log = logging.getLogger(__name__)
 
-LINQ_API_KEY = os.environ.get("LINQ_API_KEY", "")
-LINQ_API_BASE = os.environ.get("LINQ_API_BASE", "")
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+
+class NotConfigured(Exception):
+    """No Linq credentials. Not an error — notifications are simply off."""
+
 
 Event = Literal[
     "package_received",
@@ -42,7 +43,7 @@ EVENTS: dict[str, tuple[str, str]] = {
 }
 
 _env = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader(config.TEMPLATE_DIR),
     autoescape=select_autoescape(default=False),
     trim_blocks=True,
     lstrip_blocks=True,
@@ -56,17 +57,18 @@ def _send(recipient: str, subject: str, body: str) -> None:
     have the API docs — base URL, auth header, send endpoint, and what Linq
     addresses a recipient by.
     """
-    if not LINQ_API_KEY:
-        raise RuntimeError("skipped")
+    if not config.is_configured("LINQ_API_KEY", "LINQ_API_BASE"):
+        raise NotConfigured
 
     raise NotImplementedError(
         "Linq transport not wired up — need API base, auth scheme, send endpoint"
     )
     # import httpx
     # r = httpx.post(
-    #     f"{LINQ_API_BASE}/messages",
-    #     headers={"Authorization": f"Bearer {LINQ_API_KEY}"},
-    #     json={"to": recipient, "subject": subject, "body": body},
+    #     f"{config.LINQ_API_BASE}/messages",
+    #     headers={"Authorization": f"Bearer {config.LINQ_API_KEY}"},
+    #     json={"to": recipient, "from": config.LINQ_SENDER_ID,
+    #           "subject": subject, "body": body},
     #     timeout=5.0,
     # )
     # r.raise_for_status()
@@ -130,14 +132,16 @@ def notify(event: Event, package_id: str) -> None:
 
             body = _env.get_template(f"notify/{event}.txt").render(
                 pkg=dict(pkg),
-                verify_url=f"{PUBLIC_BASE_URL}/verify/{package_id}",
+                verify_url=f"{config.PUBLIC_BASE_URL}/verify/{package_id}",
             )
 
             try:
                 _send(recipient, subject, body)
             except Exception as exc:  # noqa: BLE001 — status is the return value
-                status = "skipped" if str(exc) == "skipped" else "failed"
-                _record(conn, package_id, event, recipient, status, str(exc))
+                configured = not isinstance(exc, NotConfigured)
+                status = "failed" if configured else "skipped"
+                detail = str(exc) if configured else "linq not configured"
+                _record(conn, package_id, event, recipient, status, detail)
                 log.info("notify %s/%s: %s", package_id, event, status)
                 return
 

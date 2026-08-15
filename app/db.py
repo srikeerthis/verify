@@ -1,9 +1,8 @@
 """SQLite. No migrations — schema is created on startup and edited in place."""
 
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "verify.db"
+from app.config import DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS packages (
