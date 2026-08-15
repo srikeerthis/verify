@@ -61,11 +61,11 @@ Event = Literal[
 # event -> which packages column holds the recipient.
 # Linq is SMS, so there is no subject line — the whole message is the body.
 EVENTS: dict[str, str] = {
-    "package_received": "company_contact",
-    "package_ready": "candidate_contact",
-    "package_blocked": "company_contact",
-    "escalation_resolved": "company_contact",
-    "submission_verified": "company_contact",
+    "package_received": "company_phone",
+    "package_ready": "candidate_phone",
+    "package_blocked": "company_phone",
+    "escalation_resolved": "company_phone",
+    "submission_verified": "company_phone",
 }
 
 _env = Environment(
