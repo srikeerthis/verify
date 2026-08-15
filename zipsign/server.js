@@ -52,18 +52,52 @@ app.post('/webhooks/linq', express.raw({ type: '*/*', limit: '2mb' }), async (re
   }
 });
 
-app.get('/verify/:id', async (req, res) => {
+// Everything the pipeline serves to a human goes through here, because the
+// tunnel points at this app and these URLs are what we put in text messages.
+async function proxyGet(req, res, pipelinePath) {
   if (!PIPELINE_ORIGIN) return res.status(503).json({ error: 'PIPELINE_URL not set.' });
   try {
-    const r = await fetch(
-      `${PIPELINE_ORIGIN.replace(/\/$/, '')}/verify/${encodeURIComponent(req.params.id)}`
-    );
+    const r = await fetch(`${PIPELINE_ORIGIN.replace(/\/$/, '')}${pipelinePath}`);
     res.status(r.status).type(r.headers.get('content-type') || 'application/json')
        .send(await r.text());
   } catch {
     res.status(502).json({ error: 'Pipeline unreachable.' });
   }
-});
+}
+
+app.get('/verify/:id', (req, res) =>
+  proxyGet(req, res, `/verify/${encodeURIComponent(req.params.id)}`));
+
+app.get('/submit/:id', (req, res) =>
+  proxyGet(req, res, `/submit/${encodeURIComponent(req.params.id)}`));
+
+// The candidate's solution: a pasted link, or a zip up to the same size limit
+// the upload form allows. Raw body again — this is multipart, and re-encoding
+// it here would corrupt the file. The pipeline answers with a 303 to the new
+// status page, which must be passed back rather than followed, or the browser
+// would never change address.
+app.post('/submit/:id', express.raw({ type: '*/*', limit: `${MAX_UPLOAD_MB}mb` }),
+  async (req, res) => {
+    if (!PIPELINE_ORIGIN) return res.status(503).json({ error: 'PIPELINE_URL not set.' });
+    try {
+      const r = await fetch(
+        `${PIPELINE_ORIGIN.replace(/\/$/, '')}/submit/${encodeURIComponent(req.params.id)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': req.headers['content-type'] || 'application/octet-stream' },
+          body: req.body,
+          redirect: 'manual',
+        }
+      );
+      const location = r.headers.get('location');
+      if (location) return res.redirect(303, location);
+      res.status(r.status).type(r.headers.get('content-type') || 'text/html')
+         .send(await r.text());
+    } catch (err) {
+      console.error('Submit proxy failed:', err);
+      res.status(502).json({ error: 'Pipeline unreachable.' });
+    }
+  });
 
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
