@@ -46,6 +46,9 @@ LINQ_API_KEY = _get("LINQ_API_KEY")
 LINQ_API_BASE = _get("LINQ_API_BASE", "https://api.linqapp.com/api/partner/v3")
 # Optional: Linq picks the best sender line when this is empty.
 LINQ_SENDER_ID = _get("LINQ_SENDER_ID")
+# whsec_... — handed back when the webhook subscription is created. Without it
+# inbound webhooks are rejected rather than trusted.
+LINQ_WEBHOOK_SECRET = _get("LINQ_WEBHOOK_SECRET")
 
 # --- agent (agent.py) ---------------------------------------------------
 ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY")
