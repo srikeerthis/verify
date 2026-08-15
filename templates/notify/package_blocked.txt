@@ -1,0 +1,9 @@
+We blocked your take-home package. It was not delivered to the candidate.
+
+The scan found patterns associated with credential theft. If this is a false
+positive, the full findings — file, line, and a plain-English reason for each —
+are on the report:
+
+{{ verify_url }}
+
+Fix the flagged files and re-upload to run verification again.

@@ -1,0 +1,8 @@
+A human has finished reviewing the ambiguous findings on your package.
+
+Verdict: {{ pkg.human_verdict or pkg.verdict }}
+
+Two independent reviewers looked at the flagged snippets. Where they disagreed,
+we resolved to SUSPICIOUS and said so in the report rather than guessing.
+
+Full report: {{ verify_url }}

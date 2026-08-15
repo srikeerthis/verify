@@ -1,0 +1,9 @@
+The candidate's submission has been verified and is ready for you to open.
+
+We ran the same checks in this direction that we ran on your take-home: static
+scan, sandbox, and human review where it was ambiguous. Nothing in this package
+reads credentials or executes on install.
+
+The verdict is signed. Verify it independently here:
+
+{{ verify_url }}

@@ -1,0 +1,8 @@
+We received your take-home package and started verification.
+
+It goes through a static scan for credential-stealing patterns, then an isolated
+sandbox run. If anything is ambiguous, a human reviews it before we deliver.
+
+You will get one more message when it is cleared or blocked.
+
+Track it here: {{ verify_url }}

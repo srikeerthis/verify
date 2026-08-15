@@ -1,0 +1,9 @@
+Your take-home assessment is verified and ready to download.
+
+We scanned this package before it reached you. It does not read your SSH keys,
+cloud credentials, or browser data, and it does not run code on install.
+
+You do not have to take our word for it — the verdict is signed, and you can
+check the signature yourself here:
+
+{{ verify_url }}
