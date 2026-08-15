@@ -9,6 +9,10 @@
   <p class="tag">{{ subhead }}</p>
 </div>
 
+{% if is_challenge and pkg.status == "delivered" %}
+<p class="hint">The candidate has been texted the package and a link to send their solution back.</p>
+{% endif %}
+
 <section class="card">
   <h2>Where this is</h2>
   <ol class="steps">
@@ -50,31 +54,13 @@
   </p>
   {% endif %}
 
-  {% if pkg.webapp_verify_url or pkg.webapp_download_url %}
-  <div class="actions">
-    <a class="btn primary" href="{{ pkg.webapp_verify_url or pkg.webapp_download_url }}">
-      {{ "Open the package" if is_challenge else "Open the submission" }}
-    </a>
-    {% if pkg.webapp_signature_url %}
-    <a class="btn" href="{{ pkg.webapp_signature_url }}">Signature</a>
-    <a class="btn" href="{{ pkg.webapp_publickey_url }}">Public key</a>
-    {% endif %}
-  </div>
-  {% endif %}
+{#- Status only, deliberately. This link is tracking, and it goes to whoever we
+    texted — the recruiter for a challenge, both sides for a submission. The
+    actions belong to the person who owns them: the package itself is opened
+    from the web app link in the candidate's own text, and solutions are sent
+    through /submit/{id}. Putting either button here showed the recruiter
+    controls that were never theirs. -#}
 </section>
-
-{% if is_challenge and pkg.status == "delivered" %}
-<section class="card">
-  <h2>Sending your solution back</h2>
-  <p class="hint">
-    When you're done, submit it here and we'll scan it before it reaches the
-    company — the same check we ran on the package you received.
-  </p>
-  <div class="actions">
-    <a class="btn primary" href="{{ submit_url }}">Submit your solution</a>
-  </div>
-</section>
-{% endif %}
 
 {% if submissions %}
 <section class="card">

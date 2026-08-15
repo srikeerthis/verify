@@ -247,11 +247,16 @@ def verify_json(package_id: str) -> JSONResponse:
 
 @app.get("/verify/{package_id}", response_class=HTMLResponse)
 def verify_page(request: Request, package_id: str):
-    """The page every text links to — for both sides.
+    """Tracking. Status and findings, no controls.
 
     People open these on a phone, from an SMS, often unsure whether we are a
     scam. A wall of JSON was the wrong answer. The JSON is still there for
     anything scripted: /verify/{id}.json, or an Accept: application/json header.
+
+    Deliberately read-only: the package_id is the only thing guarding this URL
+    and both sides are texted one, so it must not carry an action that belongs
+    to only one of them. Downloading happens through the web app link in the
+    candidate's own text; submitting happens at /submit/{id}.
     """
     with get_conn() as conn:
         pkg = get_package(conn, package_id)
