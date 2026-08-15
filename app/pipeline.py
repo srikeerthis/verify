@@ -1,6 +1,7 @@
 """Orchestration. The only place that knows the order of operations.
 
-    intake  -> ingest -> scan -> judge -> [escalate] -> sign -> announce
+    intake -> ingest -> scan (static + LLM review + sandbox, zip sources) ->
+    judge -> [escalate] -> sign -> announce
 
 One rule holds the whole product together: **nothing is texted to anyone until a
 signature exists.** The message says "here is a verified package" and links to
@@ -21,7 +22,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app import agent, escalate, handoff, ingest, signing, static_scan, workflow
+from app import agent, escalate, handoff, ingest, sandbox_scan, signing, static_scan, workflow
 from app.db import get_conn, get_package, set_status
 
 log = logging.getLogger(__name__)
@@ -128,7 +129,27 @@ def process(package_id: str) -> None:
                 set_status(conn, package_id, "failed")
             return
 
-        findings = static_scan.scan(ingested)
+        try:
+            findings = static_scan.scan(ingested)
+
+            # Dynamic scan only covers zip sources today. ingest.fetch already
+            # unpacked the source locally either way; for a zip source we
+            # just re-pack what's on disk rather than re-download, since
+            # sandbox_scan.run() takes a zip buffer.
+            if pkg["source_url"].endswith(".zip"):
+                try:
+                    zip_bytes = _rezip(ingested)
+                    sandbox_findings, run_summary = sandbox_scan.run(zip_bytes)
+                    findings += sandbox_findings
+                    log.info("process %s: sandbox scan — install=%s build=%s test=%s (%d findings)",
+                             package_id, run_summary["install"], run_summary["build"],
+                             run_summary["test"], len(sandbox_findings))
+                except sandbox_scan.SandboxScanError as exc:
+                    log.warning("process %s: sandbox scan skipped — %s", package_id, exc)
+        finally:
+            if ingested.cleanup:
+                ingested.cleanup()
+
         verdict = agent.judge(findings)
 
         with get_conn() as conn:
@@ -230,3 +251,17 @@ def _finalize(package_id: str, verdict: str, *, escalated: bool = False) -> None
 
     with get_conn() as conn:
         set_status(conn, package_id, "delivered")
+
+
+def _rezip(ingested) -> bytes:  # type: ignore[no-untyped-def]
+    """Re-packs the already-unpacked source tree into zip bytes for
+    sandbox_scan.run(), which expects a zip buffer (it's built to accept
+    exactly what a recruiter/candidate would upload)."""
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for rel_path in ingested.files:
+            zf.write(ingested.root / rel_path, rel_path)
+    return buf.getvalue()
