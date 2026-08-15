@@ -54,9 +54,10 @@ EVENT_PROMPTS: dict[str, str] = {
     "package_ready": (
         "The take-home scanned CLEAN, is signed, and is published. Text the "
         "candidate it is ready. Tell them what was checked in plain English "
-        "(does not read credentials, does not run code on install) and give "
-        "them the download link. Calm and short — this person thinks you "
-        "might be a scam."
+        "(does not read credentials, does not run code on install), give them "
+        "the download link, and give them the submit_solution link so they "
+        "know how to send their work back. Calm and short — this person thinks "
+        "you might be a scam."
     ),
     "package_blocked": (
         "The scan flagged this package MALICIOUS and it was blocked. Text the "
@@ -100,6 +101,12 @@ def _facts(package_id: str) -> str:
         ],
         "links": {
             "report": f"{config.PUBLIC_BASE_URL}/verify/{package_id}",
+            # Only give this to a candidate holding a take-home; on a
+            # submission it points back at the package they already sent.
+            "submit_solution": (
+                f"{config.PUBLIC_BASE_URL}/submit/{package_id}"
+                if pkg["direction"] == "to_candidate" else None
+            ),
             "download": pkg["webapp_download_url"],
             "signature": pkg["webapp_signature_url"],
             "public_key": pkg["webapp_publickey_url"],

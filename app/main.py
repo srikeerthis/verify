@@ -8,12 +8,14 @@ Two of these are contracts other people build against:
 Everything else is the verify surface from CLAUDE.md.
 """
 
+import json
 import logging
 
-from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 
-from app import config, pipeline, signing, tools, webhooks, workflow
+from app import config, handoff, pipeline, signing, tools, webhooks, workflow
 from app.db import get_conn, get_package, init_db
 from app.notify import E164
 
@@ -21,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="Verify")
+templates = Jinja2Templates(directory=str(config.TEMPLATE_DIR))
 
 
 @app.on_event("startup")
@@ -155,9 +158,72 @@ async def linq_webhook(request: Request, background: BackgroundTasks) -> JSONRes
     return JSONResponse({"status": "handled_by_agent", "known_sender": True})
 
 
-@app.get("/verify/{package_id}")
-def verify_package(package_id: str) -> JSONResponse:
-    """The link every text points at. JSON for now; the template comes later."""
+STEPS = [
+    ("received", "Package received"),
+    ("scanning", "Scanning for credential-stealing code"),
+    ("signed", "Verdict signed"),
+    ("delivered", "Handed on"),
+]
+
+# status -> (pill class, short verdict label when there is no verdict yet)
+_PILL = {"CLEAN": "ok", "SUSPICIOUS": "warn", "MALICIOUS": "bad"}
+
+
+def _page_context(pkg) -> dict:
+    """Everything verify.html needs, computed here so the template stays dumb."""
+    verdict = pkg["human_verdict"] or pkg["verdict"]
+    status = pkg["status"]
+    is_challenge = pkg["direction"] == "to_candidate"
+
+    # Where we are on the four-step track. `escalated` and `blocked` are not
+    # steps — they are answers — so they colour the verdict, not the list.
+    order = [s[0] for s in STEPS]
+    reached = order.index(status) if status in order else (
+        1 if status in ("escalated", "failed") else len(order) - 1
+    )
+    steps = [
+        {"label": label,
+         "state": "done" if i < reached else ("now" if i == reached else "")}
+        for i, (_, label) in enumerate(STEPS)
+    ]
+
+    if status == "blocked":
+        headline = "This package was blocked"
+        subhead = "The scan found code that goes after credentials. Nobody received it."
+    elif status == "escalated":
+        headline = "A person is reviewing this"
+        subhead = "The scan was ambiguous, so a human is looking at the flagged part."
+    elif status == "failed":
+        headline = "We couldn't check this"
+        subhead = "The link could not be fetched. Nothing was delivered."
+    elif status in ("received", "scanning"):
+        headline = "Checking this package"
+        subhead = "Usually takes under a minute."
+    elif is_challenge:
+        headline = "This take-home is verified"
+        subhead = "Scanned, signed, and safe to open."
+    else:
+        headline = "This submission is verified"
+        subhead = "Scanned and signed, ready for the company to open."
+
+    return {
+        "pkg": dict(pkg),
+        "findings": json.loads(pkg["findings_json"] or "[]"),
+        "steps": steps,
+        "headline": headline,
+        "subhead": subhead,
+        "pill": _PILL.get(verdict, "warn"),
+        "verdict_label": verdict or "still scanning",
+        "base_url": config.PUBLIC_BASE_URL,
+        "submit_url": f"{config.PUBLIC_BASE_URL}/submit/{pkg['package_id']}",
+    }
+
+
+# Declared before the HTML route on purpose: a path parameter happily matches
+# "abc.json", so the more specific route has to be registered first.
+@app.get("/verify/{package_id}.json")
+def verify_json(package_id: str) -> JSONResponse:
+    """The machine-readable verdict. Unchanged shape — other services read it."""
     with get_conn() as conn:
         pkg = get_package(conn, package_id)
     if pkg is None:
@@ -176,6 +242,104 @@ def verify_package(package_id: str) -> JSONResponse:
             "signature": pkg["signature"],
             "signed_at": pkg["signed_at"],
         }
+    )
+
+
+@app.get("/verify/{package_id}", response_class=HTMLResponse)
+def verify_page(request: Request, package_id: str):
+    """The page every text links to — for both sides.
+
+    People open these on a phone, from an SMS, often unsure whether we are a
+    scam. A wall of JSON was the wrong answer. The JSON is still there for
+    anything scripted: /verify/{id}.json, or an Accept: application/json header.
+    """
+    with get_conn() as conn:
+        pkg = get_package(conn, package_id)
+        if pkg is None:
+            raise HTTPException(404, "no such package")
+        submissions = conn.execute(
+            """
+            SELECT package_id, status, verdict, created_at FROM packages
+             WHERE parent_id = ? ORDER BY created_at DESC
+            """,
+            (package_id,),
+        ).fetchall()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return verify_json(package_id)
+
+    ctx = _page_context(pkg)
+    ctx["submissions"] = [dict(s) for s in submissions]
+    return templates.TemplateResponse(request, "verify.html", ctx)
+
+
+@app.get("/submit/{package_id}", response_class=HTMLResponse)
+def submit_page(request: Request, package_id: str, error: str = ""):
+    """Where a candidate sends their solution back.
+
+    Replying to the SMS with a link does the same thing. This exists because a
+    zip has no other way in, and because "reply to this text" is a lot to ask of
+    someone who already suspects we are a scam.
+    """
+    with get_conn() as conn:
+        pkg = get_package(conn, package_id)
+    if pkg is None or pkg["direction"] != "to_candidate":
+        raise HTTPException(404, "no such take-home")
+
+    return templates.TemplateResponse(
+        request, "submit.html",
+        {"pkg": dict(pkg), "base_url": config.PUBLIC_BASE_URL, "error": error},
+    )
+
+
+@app.post("/submit/{package_id}")
+async def submit_solution(
+    request: Request,
+    background: BackgroundTasks,
+    package_id: str,
+    solution_url: str = Form(""),
+    file: UploadFile | None = File(None),
+):
+    """Accept a link or a zip, then run the same pipeline the SMS path runs."""
+    with get_conn() as conn:
+        pkg = get_package(conn, package_id)
+    if pkg is None or pkg["direction"] != "to_candidate":
+        raise HTTPException(404, "no such take-home")
+
+    def again(message: str):
+        return templates.TemplateResponse(
+            request, "submit.html",
+            {"pkg": dict(pkg), "base_url": config.PUBLIC_BASE_URL,
+             "error": message, "prefill": solution_url},
+            status_code=400,
+        )
+
+    source_url, webapp = solution_url.strip(), None
+
+    if file is not None and file.filename:
+        if not file.filename.lower().endswith(".zip"):
+            return again("That doesn't look like a .zip — send a zip or paste a link.")
+        data = await file.read()
+        if data[:2] != b"PK":
+            return again("That file isn't a zip archive.")
+        # Park the bytes in the web app so the pipeline has a URL to scan and
+        # the company has a signed page to open. Same route handoff uses.
+        links = handoff.upload_zip(data, file.filename)
+        if links is None:
+            return again("We couldn't store that file. Try again, or paste a link.")
+        source_url, webapp = links["download_url"], links
+
+    if not source_url.startswith(("http://", "https://")):
+        return again("Paste a link starting with http:// or https://, or upload a zip.")
+
+    submission_id = pipeline.create_submission(
+        parent_id=package_id, source_url=source_url, webapp=webapp
+    )
+    background.add_task(pipeline.process, submission_id)
+    background.add_task(workflow.ack_submission, submission_id)
+
+    return RedirectResponse(
+        f"{config.PUBLIC_BASE_URL}/verify/{submission_id}", status_code=303
     )
 
 

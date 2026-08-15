@@ -105,12 +105,17 @@ def _multipart(fields: dict[str, str], filename: str, blob: bytes) -> tuple[byte
 
 
 def _post_package(pkg: Any) -> dict:
-    if not config.is_configured("WEBAPP_API_KEY", "WEBAPP_BASE_URL"):
-        raise HandoffError("web app not configured")
-
     blob = _report_zip(pkg)
     direction = "challenge" if pkg["direction"] == "to_candidate" else "submission"
     filename = f"{pkg['package_id'].split('-')[0]}-{direction}-report.zip"
+    return _post_blob(blob, filename)
+
+
+def _post_blob(blob: bytes, filename: str) -> dict:
+    """Sign and store one zip in the web app. Returns its raw link payload."""
+    if not config.is_configured("WEBAPP_API_KEY", "WEBAPP_BASE_URL"):
+        raise HandoffError("web app not configured")
+
     body, boundary = _multipart(
         {"email": config.WEBAPP_SIGNER_EMAIL}, filename, blob
     )
@@ -132,6 +137,29 @@ def _post_package(pkg: Any) -> dict:
         raise HandoffError(f"web app returned HTTP {exc.code}: {detail}") from exc
     except Exception as exc:  # noqa: BLE001 — network, DNS, timeout
         raise HandoffError(f"{type(exc).__name__}: {exc}") from exc
+
+
+def upload_zip(blob: bytes, filename: str) -> dict | None:
+    """Store a candidate's uploaded solution and return its links.
+
+    A zip arriving through the submit form has no URL for the scanner to fetch,
+    so it goes into the web app first and the pipeline scans what comes back
+    out. Returns None when the web app is off or refuses it — the caller shows
+    that as a form error rather than losing the upload silently.
+    """
+    try:
+        meta = _post_blob(blob, filename)
+    except HandoffError as exc:
+        log.warning("upload_zip %s failed — %s", filename, exc)
+        return None
+
+    return {
+        "id": meta.get("id"),
+        "verify_url": meta.get("verifyUrl"),
+        "download_url": meta.get("downloadUrl"),
+        "signature_url": meta.get("signatureUrl"),
+        "publickey_url": meta.get("publicKeyUrl"),
+    }
 
 
 def publish(package_id: str) -> bool:

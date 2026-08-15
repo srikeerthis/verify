@@ -68,13 +68,17 @@ def create_challenge(
     return package_id
 
 
-def create_submission(*, parent_id: str, source_url: str) -> str:
-    """Candidate reply. Called by the Linq webhook when a link comes back.
+def create_submission(
+    *, parent_id: str, source_url: str, webapp: dict | None = None
+) -> str:
+    """Candidate reply. From the Linq webhook, or the submit page.
 
     Copies the contacts off the challenge row so the submission can notify
-    without another lookup.
+    without another lookup. `webapp` carries links for a zip that came in
+    through the submit form and is already stored in the web app.
     """
     package_id = str(uuid.uuid4())
+    webapp = webapp or {}
     with get_conn() as conn:
         parent = get_package(conn, parent_id)
         if parent is None:
@@ -84,11 +88,15 @@ def create_submission(*, parent_id: str, source_url: str) -> str:
             """
             INSERT INTO packages (package_id, parent_id, direction, source_url,
                                   status, company_email, company_phone,
-                                  candidate_phone)
-            VALUES (?, ?, 'to_company', ?, 'received', ?, ?, ?)
+                                  candidate_phone, webapp_id, webapp_verify_url,
+                                  webapp_download_url, webapp_signature_url,
+                                  webapp_publickey_url)
+            VALUES (?, ?, 'to_company', ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (package_id, parent_id, source_url, parent["company_email"],
-             parent["company_phone"], parent["candidate_phone"]),
+             parent["company_phone"], parent["candidate_phone"],
+             webapp.get("id"), webapp.get("verify_url"), webapp.get("download_url"),
+             webapp.get("signature_url"), webapp.get("publickey_url")),
         )
         conn.commit()
 
