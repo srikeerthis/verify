@@ -125,7 +125,7 @@ app.post('/api/auth/verify', (req, res) => {
     ok: true,
     email,
     token,
-    successUrl: '/done',
+    successUrl: `/u/${token}`,
     keyFingerprint: fingerprint(publicKeyPem),
     publicKeyUrl: `${base}/api/keys/${encodeURIComponent(email)}`,
   };
@@ -147,10 +147,12 @@ app.get('/api/me', requireAuth, (req, res) => {
   res.json({ email: req.userEmail, keyFingerprint: fingerprint(publicKeyPem) });
 });
 
+// Same combined confirm-and-drop page as "/". With a valid token the client
+// skips the email steps and goes straight to the dropzone.
 app.get('/u/:token', (req, res) => {
   const email = getEmailFromToken(req.params.token);
   if (!email) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'public', 'upload.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/done', (req, res) => {
