@@ -22,6 +22,49 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const app = express();
 app.disable('x-powered-by');
+
+// --- pipeline passthrough ---------------------------------------------------
+// One public tunnel, not two. The web app is the only thing exposed, and the
+// two pipeline paths that have to be reachable from outside are proxied
+// through it: Linq's inbound webhooks, and the verify page every SMS links to.
+//
+// The webhook body is forwarded as raw bytes, before any JSON parsing. Linq
+// signs the exact bytes it sent, so parsing and re-serialising here would
+// change them and every signature check downstream would fail.
+const PIPELINE_ORIGIN = process.env.PIPELINE_URL || '';
+
+app.post('/webhooks/linq', express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
+  if (!PIPELINE_ORIGIN) return res.status(503).json({ error: 'PIPELINE_URL not set.' });
+  try {
+    const headers = { 'content-type': req.headers['content-type'] || 'application/json' };
+    for (const h of ['webhook-id', 'webhook-timestamp', 'webhook-signature']) {
+      if (req.headers[h]) headers[h] = req.headers[h];
+    }
+    const r = await fetch(`${PIPELINE_ORIGIN.replace(/\/$/, '')}/webhooks/linq`, {
+      method: 'POST', headers, body: req.body,
+    });
+    res.status(r.status).type(r.headers.get('content-type') || 'application/json')
+       .send(await r.text());
+  } catch (err) {
+    console.error('Webhook proxy failed:', err);
+    // 502 makes Linq retry, which is right: the pipeline may just be restarting.
+    res.status(502).json({ error: 'Pipeline unreachable.' });
+  }
+});
+
+app.get('/verify/:id', async (req, res) => {
+  if (!PIPELINE_ORIGIN) return res.status(503).json({ error: 'PIPELINE_URL not set.' });
+  try {
+    const r = await fetch(
+      `${PIPELINE_ORIGIN.replace(/\/$/, '')}/verify/${encodeURIComponent(req.params.id)}`
+    );
+    res.status(r.status).type(r.headers.get('content-type') || 'application/json')
+       .send(await r.text());
+  } catch {
+    res.status(502).json({ error: 'Pipeline unreachable.' });
+  }
+});
+
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -229,11 +272,10 @@ app.post('/api/packages', requireAuth, upload.single('file'), async (req, res) =
 // download URL as the source so the pipeline fetches exactly the bytes we
 // signed, plus the links we already minted so it does not publish a duplicate
 // copy back to us.
-const PIPELINE_URL = process.env.PIPELINE_URL || '';
 const E164 = /^\+[1-9]\d{7,14}$/;
 
 async function sendToPipeline({ links, email, companyPhone, candidatePhone }) {
-  if (!PIPELINE_URL) {
+  if (!PIPELINE_ORIGIN) {
     console.warn('PIPELINE_URL not set — package signed but nobody will be texted.');
     return;
   }
@@ -249,7 +291,7 @@ async function sendToPipeline({ links, email, companyPhone, candidatePhone }) {
     webapp_publickey_url: links.publicKeyUrl,
   });
 
-  const res = await fetch(`${PIPELINE_URL.replace(/\/$/, '')}/packages`, {
+  const res = await fetch(`${PIPELINE_ORIGIN.replace(/\/$/, '')}/packages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form,

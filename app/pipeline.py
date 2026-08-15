@@ -93,10 +93,8 @@ def create_submission(*, parent_id: str, source_url: str) -> str:
         conn.commit()
 
     log.info("intake %s: submission answering %s", package_id, parent_id)
-    # Acknowledge to the candidate that their link landed. Mirrors the
-    # package_received the recruiter gets on intake — whoever hands something
-    # over hears back immediately, before any scanning happens.
-    notify("submission_received", package_id)
+    # No ack from here — main.py dispatches workflow.ack_submission once the
+    # row exists, which texts the candidate that their link landed.
     return package_id
 
 
