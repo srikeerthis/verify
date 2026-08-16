@@ -71,7 +71,41 @@
     </section>
 
     <section class="card step" id="step4" hidden>
-      <h2><span class="num">4</span> Drop your package</h2>
+      <h2><span class="num">4</span> Scan depth</h2>
+      <p class="hint">Every package gets a free static scan. Dynamic scanning also runs the code in a sealed sandbox and watches what it actually does.</p>
+
+      <div class="plan selected" id="planFree" role="button" tabindex="0" aria-pressed="true">
+        <div class="plan-head">
+          <span class="plan-check" aria-hidden="true"></span>
+          <b>Static scan</b>
+          <span class="plan-tag">Free</span>
+        </div>
+        <p class="plan-body">Reads every file and flags credential-stealing patterns: install hooks, key and cookie grabs, obfuscated payloads.</p>
+      </div>
+
+      <div class="plan" id="planDynamic" role="button" tabindex="0" aria-pressed="false">
+        <div class="plan-head">
+          <span class="plan-check" aria-hidden="true"></span>
+          <b>Static + dynamic</b>
+          <span class="plan-tag paid">Paid</span>
+        </div>
+        <p class="plan-body">Everything in free, plus an isolated sandbox run of install, build and test &mdash; catching what only shows up when the code actually executes.</p>
+        <div id="payBox" hidden>
+          <div class="row">
+            <a id="payLink" class="btn primary" target="_blank" rel="noopener" hidden>Pay with Stripe</a>
+            <button id="paidBtn" class="btn" hidden>I&rsquo;ve paid &mdash; unlock</button>
+          </div>
+          <p class="status" id="payStatus" hidden></p>
+        </div>
+      </div>
+
+      <div class="row right">
+        <button id="depthNext" class="btn primary">Continue</button>
+      </div>
+    </section>
+
+    <section class="card step" id="step5" hidden>
+      <h2><span class="num">5</span> Drop your package</h2>
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop a zip file">
         <p class="dz-main">Drop your .zip anywhere</p>
         <p class="dz-sub">or click to browse &middot; up to 100 MB</p>

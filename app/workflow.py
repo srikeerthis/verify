@@ -19,7 +19,7 @@ called from _finalize and after, exactly where notify used to be.
 import json
 import logging
 
-from app import agent, config, notify, tools, webhooks
+from app import agent, config, escalate, notify, static_scan, tools, webhooks
 from app.db import get_conn, get_package
 
 log = logging.getLogger(__name__)
@@ -72,17 +72,22 @@ EVENT_PROMPTS: dict[str, str] = {
     ),
     "package_flagged": (
         "The scan was ambiguous, so this take-home is held for human review and "
-        "was NOT sent to the candidate. Text the recruiter: not delivered, what "
-        "was flagged and why, and that a person is reviewing it. Do not promise "
-        "a time — we do not control how fast a reviewer answers."
+        "was NOT sent to the candidate. First call escalate_review to start a "
+        "review by a cybersecurity expert. Then text the recruiter: not "
+        "delivered, what was flagged and why, and that a security expert is "
+        "reviewing it now. Do not promise a time — we do not control how fast "
+        "the expert answers. The expert's verdict arrives later and will be "
+        "reported then."
     ),
     "submission_flagged": (
         "The scan was ambiguous, so this candidate's solution is held for human "
-        "review and has NOT been passed to the company. Text the candidate that "
-        "it is on hold, that this is often a false alarm, and that they will "
-        "hear either way. No rule ids, no file names — they get the outcome, "
-        "not the scanner's reasoning. Someone's job is riding on this, so do "
-        "not make it sound like an accusation."
+        "review and has NOT been passed to the company. First call "
+        "escalate_review to start a review by a cybersecurity expert. Then text "
+        "the candidate that it is on hold, that this is often a false alarm, "
+        "and that they will hear either way — no rule ids, no file names, they "
+        "get the outcome, not the scanner's reasoning. Someone's job is riding "
+        "on this, so do not make it sound like an accusation. Also text the "
+        "recruiter that the submission is held for expert security review."
     ),
     "escalation_resolved": (
         "A human reviewer just resolved the escalation on this package. Text "
@@ -212,6 +217,71 @@ def announce(event: str, package_id: str) -> None:
         notify.notify(event, package_id)  # template fallback, never raises
     except BaseException:  # noqa: BLE001 — messaging never breaks the pipeline
         log.exception("announce %s/%s crashed", package_id, event)
+
+
+def escalate_and_alert(package_id: str, event: str) -> None:
+    """SUSPICIOUS verdict: the AGENT drives the escalation.
+
+    The model is told to call escalate_review (Terac task for a cybersecurity
+    expert) and then text the sender. This function does not wait for the
+    human — the verdict comes back through escalate.resolve -> on_human_verdict,
+    which updates the verdict, re-finalizes the package, and hands the agent
+    the escalation_resolved task.
+
+    Safety net: whatever the model did, a review must be open when this
+    returns — if the tool was never called (model off, model skipped it), the
+    review is launched directly. Never raises.
+    """
+    try:
+        if event not in EVENT_ROLES:
+            log.warning("escalate_and_alert: unknown event %r", event)
+            return
+
+        if tools.announce_already_sent(package_id, event):
+            log.info("escalate_and_alert %s/%s: already sent", package_id, event)
+            return
+
+        task = _agent_task(event, package_id)
+        agent_ok = False
+
+        if config.ANTHROPIC_API_KEY:
+            try:
+                schemas, executors = tools.build(package_id, event=event)
+                result = agent.run(
+                    task, tools=schemas, executors=executors,
+                    history=tools.load_history(package_id),
+                )
+                _record_run(package_id, task, result, fallback=False)
+                if result.tool_calls:
+                    agent_ok = True
+                    log.info("escalate_and_alert %s/%s: agent ran (%d tool calls)",
+                             package_id, event, len(result.tool_calls))
+                else:
+                    log.warning("escalate_and_alert %s/%s: agent did nothing — "
+                                "falling back", package_id, event)
+            except agent.AgentError as exc:
+                log.warning("escalate_and_alert %s/%s: agent failed — %s — "
+                            "falling back", package_id, event, exc)
+
+        if not agent_ok:
+            _record_run(package_id, task, None, fallback=True)
+            notify.notify(event, package_id)  # template fallback, never raises
+
+        # The review must exist regardless of which path texted the people.
+        if not escalate.is_pending(package_id):
+            with get_conn() as conn:
+                pkg = get_package(conn, package_id)
+            findings = [
+                static_scan.Finding(**f)
+                for f in json.loads(pkg["findings_json"] or "[]")
+            ] if pkg is not None else []
+            if findings:
+                escalate.escalate(package_id, findings)
+            else:
+                log.error("escalate_and_alert %s: no findings to escalate",
+                          package_id)
+    except BaseException:  # noqa: BLE001 — never break the pipeline
+        log.exception("escalate_and_alert %s/%s crashed", package_id, event)
 
 
 INBOUND_PROMPT = """\

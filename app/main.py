@@ -15,7 +15,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import config, escalate, handoff, pipeline, signing, tools, webhooks, workflow
+from app import config, escalate, handoff, pay, pipeline, signing, tools, webhooks, workflow
 from app.db import get_conn, get_package, init_db
 from app.notify import E164
 
@@ -109,6 +109,7 @@ def create_package(
     webapp_download_url: str = Form(""),
     webapp_signature_url: str = Form(""),
     webapp_publickey_url: str = Form(""),
+    unlock_code: str = Form(""),
 ) -> JSONResponse:
     """Recruiter intake. Accepts a form post or JSON with the same field names.
 
@@ -119,6 +120,10 @@ def create_package(
     The webapp_* fields are optional and only sent by the web app, which has
     already signed the upload and minted these links. Anyone posting a bare
     source_url still works exactly as before.
+
+    unlock_code is the Stripe session id the web app verified via /pay/verify.
+    Static scanning is free for everyone; a valid, unused code additionally
+    unlocks the dynamic sandbox run and is spent by this call.
     """
     for label, phone in (("company_phone", company_phone),
                          ("candidate_phone", candidate_phone)):
@@ -140,6 +145,7 @@ def create_package(
             "signature_url": webapp_signature_url,
             "publickey_url": webapp_publickey_url,
         } if webapp_verify_url else None,
+        unlock_code=unlock_code,
     )
     background.add_task(pipeline.process, package_id)
 
@@ -451,6 +457,41 @@ def review_decision(package_id: str, human_verdict: str = Form(...)) -> JSONResp
         raise HTTPException(422, "human_verdict must be CLEAN or MALICIOUS")
     escalate.resolve(package_id, human_verdict)
     return JSONResponse({"status": "recorded"})
+
+
+@app.get("/pay/link")
+def pay_link() -> JSONResponse:
+    """The hosted Stripe payment link for the dynamic-scan upgrade, or null
+    when payments aren't configured — the front page then shows free-only.
+    """
+    return JSONResponse(
+        {"url": pay.payment_link_url(), "configured": pay.is_configured()}
+    )
+
+
+@app.post("/pay/verify")
+def pay_verify() -> JSONResponse:
+    """The recruiter says they paid. Check Stripe, don't take their word.
+
+    Looks for a completed, paid, not-yet-used Checkout Session on our payment
+    link within the last few hours. Returns the session id as an unlock code;
+    it is spent later, when a package actually uses it. 402 = nothing found.
+    """
+    if not pay.is_configured():
+        raise HTTPException(503, "payments not configured")
+
+    try:
+        code = pay.verify()
+    except pay.PayError as exc:
+        log.warning("pay verify failed: %s", exc)
+        raise HTTPException(502, f"could not reach Stripe: {exc}") from exc
+
+    if code is None:
+        return JSONResponse(
+            {"ok": False, "detail": "No completed payment found yet."},
+            status_code=402,
+        )
+    return JSONResponse({"ok": True, "unlock_code": code})
 
 
 @app.get("/pubkey", response_class=PlainTextResponse)

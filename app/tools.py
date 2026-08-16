@@ -6,6 +6,7 @@ already on that package row, never an arbitrary number.
   contact_candidate(message)   text the candidate (candidate_phone)
   verify_zip(source_url)       download + scan a package, STUBBED scanner
   package_status()             everything the model may claim out loud
+  escalate_review()            start a Terac expert review of the findings
 
 Sends go through notify.send_raw so Linq error handling (retryable vs
 permanent, idempotency keys) stays in one place. Every outbound message is
@@ -16,7 +17,7 @@ dedupe, so a tool that skips the insert would let the agent double-text.
 import json
 import logging
 
-from app import agent, config, ingest, notify, static_scan
+from app import agent, config, escalate, ingest, notify, static_scan
 from app.db import get_conn, get_package
 
 log = logging.getLogger(__name__)
@@ -147,6 +148,50 @@ def _package_status(package_id: str):
     return tool
 
 
+def _escalate_review(package_id: str):
+    def tool(input: dict) -> str:  # noqa: A002
+        """Start a human expert review (Terac) of this package's findings.
+
+        The agent's job on a SUSPICIOUS scan: escalate, alert, stop. The
+        verdict comes back asynchronously through escalate.resolve, which
+        re-finalizes the package and hands the agent a new task.
+        """
+        with get_conn() as conn:
+            pkg = get_package(conn, package_id)
+            if pkg is None:
+                return json.dumps({"error": f"no such package: {package_id}"})
+            findings = [static_scan.Finding(**f) for f in json.loads(pkg["findings_json"] or "[]")]
+
+        if not findings:
+            return json.dumps({
+                "error": "this package has no scan findings — nothing to escalate",
+            })
+
+        status = escalate.escalate(package_id, findings)
+        notes = {
+            "launched": "Terac is recruiting a cybersecurity expert now; "
+                        "typically minutes to a few hours. Text the recruiter "
+                        "that a security expert is reviewing it, then stop — "
+                        "the verdict arrives later and you will report it then.",
+            "already_pending": "A review is already open for this package. "
+                               "Do not escalate again; just alert the recruiter.",
+            "awaiting_manual_decision": "Terac is not configured, so a reviewer "
+                                        "must be sent the review link manually. "
+                                        "Still tell the recruiter it is held "
+                                        "for human review.",
+            "failed": "Terac could not be reached. Tell the recruiter the "
+                      "package is held for human review.",
+        }
+        return json.dumps({
+            "status": status,
+            "package_id": package_id,
+            "review_url": f"{config.PUBLIC_BASE_URL}/review/{package_id}",
+            "note": notes.get(status, "unknown status"),
+        }, indent=2)
+
+    return tool
+
+
 def _schema(name: str, description: str, properties: dict, required: list[str]):
     return {
         "name": name,
@@ -209,12 +254,23 @@ def build(package_id: str, *, event: str | None = None):
             {},
             [],
         ),
+        _schema(
+            "escalate_review",
+            "Start a review of THIS package by a human cybersecurity expert "
+            "(via Terac). Use it exactly once, when a scan verdict is "
+            "SUSPICIOUS or you are otherwise unsure — then tell the recruiter "
+            "an expert is reviewing it and wait. Never resolves the verdict "
+            "yourself; the expert's answer arrives as a later task.",
+            {},
+            [],
+        ),
     ]
     executors = {
         "contact_recruiter": _contact_tool(package_id, "recruiter", event),
         "contact_candidate": _contact_tool(package_id, "candidate", event),
         "verify_zip": verify_zip,
         "package_status": _package_status(package_id),
+        "escalate_review": _escalate_review(package_id),
     }
     return tools, executors
 

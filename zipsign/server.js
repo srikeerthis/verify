@@ -71,6 +71,27 @@ app.get('/verify/:id', (req, res) =>
 app.get('/submit/:id', (req, res) =>
   proxyGet(req, res, `/submit/${encodeURIComponent(req.params.id)}`));
 
+// --- stripe paywall (dynamic scanning) ---------------------------------------
+// The pipeline owns the Stripe key and the payment-link config, so the front
+// page's pay flow is proxied there too — same single-tunnel rule as above.
+app.get('/pay/link', (req, res) => proxyGet(req, res, '/pay/link'));
+
+// Status passes through untouched on purpose: 402 ("no payment found yet")
+// and 503 ("payments not configured") are answers the page needs to show.
+app.post('/pay/verify', express.json(), async (req, res) => {
+  if (!PIPELINE_ORIGIN) return res.status(503).json({ error: 'PIPELINE_URL not set.' });
+  try {
+    const r = await fetch(`${PIPELINE_ORIGIN.replace(/\/$/, '')}/pay/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body || {}),
+    });
+    res.status(r.status).type('application/json').send(await r.text());
+  } catch {
+    res.status(502).json({ error: 'Pipeline unreachable.' });
+  }
+});
+
 // The candidate's solution: a pasted link, or a zip up to the same size limit
 // the upload form allows. Raw body again — this is multipart, and re-encoding
 // it here would corrupt the file. The pipeline answers with a 303 to the new
@@ -241,6 +262,7 @@ async function signUpload(req, res, email, { toPipeline = false } = {}) {
 
     const companyPhone = String(req.body?.company_phone || '').trim();
     const candidatePhone = String(req.body?.candidate_phone || '').trim();
+    const unlockCode = String(req.body?.unlock_code || '').trim();
     if (toPipeline) {
       for (const [label, value] of [['Your', companyPhone], ["The candidate's", candidatePhone]]) {
         if (!E164.test(value)) {
@@ -259,7 +281,7 @@ async function signUpload(req, res, email, { toPipeline = false } = {}) {
     // The package is signed and safe either way — a pipeline outage must not
     // cost the recruiter their upload, so this failure is reported, not fatal.
     try {
-      const accepted = await sendToPipeline({ links, email, companyPhone, candidatePhone });
+      const accepted = await sendToPipeline({ links, email, companyPhone, candidatePhone, unlockCode });
       res.status(201).json({ ...links, pipeline: accepted });
     } catch (err) {
       console.error('Pipeline handoff failed:', err);
@@ -310,7 +332,7 @@ app.post('/api/packages', requireAuth, upload.single('file'), async (req, res) =
 // copy back to us.
 const E164 = /^\+[1-9]\d{7,14}$/;
 
-async function sendToPipeline({ links, email, companyPhone, candidatePhone }) {
+async function sendToPipeline({ links, email, companyPhone, candidatePhone, unlockCode }) {
   if (!PIPELINE_ORIGIN) {
     console.warn('PIPELINE_URL not set — package signed but nobody will be texted.');
     return;
@@ -326,6 +348,10 @@ async function sendToPipeline({ links, email, companyPhone, candidatePhone }) {
     webapp_signature_url: links.signatureUrl,
     webapp_publickey_url: links.publicKeyUrl,
   });
+  // Optional: the Stripe session id from the paywall. Absent = free tier,
+  // static scan only. The pipeline re-checks it against Stripe and spends
+  // it exactly once.
+  if (unlockCode) form.append('unlock_code', unlockCode);
 
   const res = await fetch(`${PIPELINE_ORIGIN.replace(/\/$/, '')}/packages`, {
     method: 'POST',

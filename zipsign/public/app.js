@@ -4,6 +4,12 @@ let email = null;
 let token = null;
 let file = null;
 
+// Scan depth chosen on the front page. Free is static-only; dynamic costs a
+// one-time Stripe payment, verified by the pipeline (which holds the Stripe
+// key) and spent when the package is actually uploaded.
+let plan = 'free';
+let unlockCode = null;
+
 const emailInput = $('#email');
 const sendBtn = $('#sendBtn');
 const emailStatus = $('#emailStatus');
@@ -87,7 +93,7 @@ async function verifyCode() {
   }
 }
 
-// Verified: swap the auth steps for the identity card and reveal the drop.
+// Verified: swap the auth steps for the identity card and reveal the flow.
 // Rewriting the URL to /u/:token makes refresh work without re-verification.
 function enterVerified(t, { email: who, keyFingerprint }) {
   token = t;
@@ -98,9 +104,11 @@ function enterVerified(t, { email: who, keyFingerprint }) {
   $('#identity').hidden = false;
   $('#step3').hidden = false;
   $('#step4').hidden = false;
+  $('#step5').hidden = true;
   $('#who').textContent = who;
   $('#fp').textContent = keyFingerprint.match(/.{1,8}/g).join(' ');
   $('#companyPhone').focus();
+  initPay();
 }
 
 (async function restoreSession() {
@@ -114,6 +122,77 @@ function enterVerified(t, { email: who, keyFingerprint }) {
     window.location.replace('/');
   }
 })();
+
+// --- scan depth (free static / paid dynamic) ----------------------------------
+
+const planFree = $('#planFree');
+const planDynamic = $('#planDynamic');
+const depthNext = $('#depthNext');
+
+function selectPlan(which) {
+  plan = which;
+  const isDynamic = which === 'dynamic';
+  planFree.classList.toggle('selected', !isDynamic);
+  planDynamic.classList.toggle('selected', isDynamic);
+  planFree.setAttribute('aria-pressed', String(!isDynamic));
+  planDynamic.setAttribute('aria-pressed', String(isDynamic));
+  $('#payBox').hidden = !isDynamic;
+  if (!isDynamic) $('#payStatus').hidden = true;
+  updateDepth();
+}
+
+function updateDepth() {
+  // Continue is always fine on free; on dynamic it needs a verified payment.
+  depthNext.disabled = plan === 'dynamic' && !unlockCode;
+}
+
+let payInited = false;
+async function initPay() {
+  if (payInited) return;
+  payInited = true;
+  try {
+    const res = await fetch('/pay/link');
+    const data = await res.json();
+    if (data.url) {
+      const a = $('#payLink');
+      a.href = data.url;
+      a.hidden = false;
+      $('#paidBtn').hidden = false;
+    }
+    // No payment link configured: keep the paid plan, but say so plainly
+    // rather than letting the pay buttons do nothing.
+    if (!data.configured) {
+      $('#payBox').hidden = false;
+      showStatus($('#payStatus'), 'Payments are not configured on this deployment.', false);
+    }
+  } catch {
+    // The pipeline being down is reported when it matters — at upload time.
+  }
+}
+
+async function checkPayment() {
+  const btn = $('#paidBtn');
+  btn.disabled = true;
+  const status = $('#payStatus');
+  showStatus(status, 'Checking Stripe\u2026', true);
+  try {
+    const res = await fetch('/pay/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      unlockCode = data.unlock_code;
+      showStatus(status, 'Payment verified \u2014 dynamic scanning is unlocked for your next upload.', true);
+    } else {
+      unlockCode = null;
+      showStatus(status, data.detail || 'No completed payment found yet. Give it a few seconds after checkout, then try again.', false);
+    }
+  } catch {
+    unlockCode = null;
+    showStatus(status, 'Could not reach the payment check. Try again.', false);
+  } finally {
+    btn.disabled = false;
+    updateDepth();
+  }
+}
 
 // --- zip drop ----------------------------------------------------------------
 
@@ -178,6 +257,7 @@ function upload(f, to) {
     // what actually texts the candidate.
     fd.append('company_phone', to.company);
     fd.append('candidate_phone', to.candidate);
+    if (plan === 'dynamic' && unlockCode) fd.append('unlock_code', unlockCode);
     xhr.send(fd);
   });
 }
@@ -209,6 +289,17 @@ sendBtn.addEventListener('click', sendCode);
 emailInput.addEventListener('keydown', (e) => e.key === 'Enter' && sendCode());
 verifyBtn.addEventListener('click', verifyCode);
 otpInput.addEventListener('keydown', (e) => e.key === 'Enter' && verifyCode());
+
+planFree.addEventListener('click', () => selectPlan('free'));
+planDynamic.addEventListener('click', () => selectPlan('dynamic'));
+[planFree, planDynamic].forEach((el) =>
+  el.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && el.click())
+);
+$('#paidBtn').addEventListener('click', checkPayment);
+depthNext.addEventListener('click', () => {
+  $('#step5').hidden = false;
+  $('#step5').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
 
 signBtn.addEventListener('click', signAndUpload);
 $('#clearFile').addEventListener('click', clearFile);

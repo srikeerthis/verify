@@ -22,7 +22,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from app import agent, escalate, handoff, ingest, sandbox_scan, signing, static_scan, workflow
+from app import agent, handoff, ingest, pay, sandbox_scan, signing, static_scan, workflow
 from app.db import get_conn, get_package, set_status
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ def create_challenge(
     company_phone: str,
     candidate_phone: str,
     webapp: dict | None = None,
+    unlock_code: str = "",
 ) -> str:
     """Recruiter intake. Called by the frontend form. Returns the package id.
 
@@ -45,21 +46,28 @@ def create_challenge(
     Passing them means handoff.publish sees the package as already published and
     skips it — otherwise we would download our own zip and upload a duplicate
     copy straight back.
+
+    `unlock_code` is the Stripe session id the web app verified earlier. The
+    static scan is free; this is what pays for the dynamic sandbox run, and it
+    spends exactly once.
     """
     package_id = str(uuid.uuid4())
     webapp = webapp or {}
+    dynamic = 1 if (unlock_code and pay.consume(unlock_code, package_id)) else 0
     with get_conn() as conn:
         conn.execute(
             """
             INSERT INTO packages (package_id, direction, source_url, status,
                                   company_email, company_phone, candidate_phone,
-                                  webapp_id, webapp_verify_url, webapp_download_url,
-                                  webapp_signature_url, webapp_publickey_url)
-            VALUES (?, 'to_candidate', ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)
+                                  dynamic, webapp_id, webapp_verify_url,
+                                  webapp_download_url, webapp_signature_url,
+                                  webapp_publickey_url)
+            VALUES (?, 'to_candidate', ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (package_id, source_url, company_email, company_phone, candidate_phone,
-             webapp.get("id"), webapp.get("verify_url"), webapp.get("download_url"),
-             webapp.get("signature_url"), webapp.get("publickey_url")),
+             dynamic, webapp.get("id"), webapp.get("verify_url"),
+             webapp.get("download_url"), webapp.get("signature_url"),
+             webapp.get("publickey_url")),
         )
         conn.commit()
 
@@ -132,11 +140,13 @@ def process(package_id: str) -> None:
         try:
             findings = static_scan.scan(ingested)
 
-            # Dynamic scan only covers zip sources today. ingest.fetch already
-            # unpacked the source locally either way; for a zip source we
-            # just re-pack what's on disk rather than re-download, since
-            # sandbox_scan.run() takes a zip buffer.
-            if pkg["source_url"].endswith(".zip"):
+            # Dynamic scan is paid: only packages whose Stripe payment was
+            # consumed at intake run in the sandbox. Everyone gets static.
+            # Zip sources only today. ingest.fetch already unpacked the source
+            # locally either way; for a zip source we just re-pack what's on
+            # disk rather than re-download, since sandbox_scan.run() takes a
+            # zip buffer.
+            if pkg["dynamic"] and pkg["source_url"].endswith(".zip"):
                 try:
                     zip_bytes = _rezip(ingested)
                     sandbox_findings, run_summary = sandbox_scan.run(zip_bytes)
@@ -168,7 +178,9 @@ def process(package_id: str) -> None:
                  len(findings))
 
         # CLEAN and MALICIOUS finalize automatically. SUSPICIOUS goes to Terac
-        # and comes back through on_human_verdict.
+        # and comes back through on_human_verdict. The agent drives the
+        # escalation itself (workflow.escalate_and_alert): it calls the Terac
+        # tool, alerts the recruiter, then stops and waits for the verdict.
         if verdict.verdict == "SUSPICIOUS":
             with get_conn() as conn:
                 set_status(conn, package_id, "escalated")
@@ -176,12 +188,11 @@ def process(package_id: str) -> None:
             # this the sender hears nothing at all between "we have it" and a
             # human verdict that may be hours away — and with no Terac key set,
             # may never come. Silence here reads as a broken pipeline.
-            workflow.announce(
+            workflow.escalate_and_alert(
+                package_id,
                 "package_flagged" if pkg["direction"] == "to_candidate"
                 else "submission_flagged",
-                package_id,
             )
-            escalate.escalate(package_id, findings)
             return
 
         _finalize(package_id, verdict.verdict)

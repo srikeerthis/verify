@@ -101,8 +101,12 @@ OPENAI_API_KEY = SCAN_API_KEY  # legacy alias, referenced by older call sites
 SUPERSERVE_API_KEY = _get("SUPERSERVE_API_KEY")
 
 # --- stripe (pay.py) ----------------------------------------------------
+# Dynamic scanning is paid: the recruiter unlocks it per package through a
+# Stripe Payment Link (hosted page — we never see a card). The secret key
+# verifies payments server-side; no webhook is needed. Leave either empty and
+# the front page shows the free static-only tier.
 STRIPE_SECRET_KEY = _get("STRIPE_SECRET_KEY")
-STRIPE_PRICE_ID = _get("STRIPE_PRICE_ID")
+STRIPE_PAYMENT_LINK_URL = _get("STRIPE_PAYMENT_LINK_URL")
 
 # --- webapp handoff (handoff.py) ----------------------------------------
 # The Verify web app (zipsign/ in this repo): the human-friendly front end that

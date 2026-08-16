@@ -213,6 +213,78 @@ input.otp {
 .hint:last-child { margin-bottom: 0; }
 .muted { color: var(--muted); }
 
+/* ---------- scan depth plans ---------- */
+
+.plan {
+  border: 1.5px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 15px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.plan:hover { border-color: var(--accent-border); }
+
+.plan.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.10);
+}
+
+.plan-head { display: flex; align-items: center; gap: 9px; font-size: 14.5px; }
+
+.plan-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.plan.selected .plan-check {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.plan.selected .plan-check::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.plan-tag {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.plan-tag.paid {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.plan-body { margin: 8px 0 0 27px; color: var(--muted); font-size: 13.5px; }
+
+#payBox { margin: 12px 0 0 27px; }
+#payBox .row { flex-wrap: wrap; }
+#payBox .status { margin: 12px 0 0; }
+
 /* ---------- dropzone ---------- */
 
 .dropzone {

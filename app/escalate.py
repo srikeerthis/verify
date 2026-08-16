@@ -33,6 +33,9 @@ TERAC_API_URL = "https://terac.com/api/external/v2"
 # the GET /review/{id} page handler in main.py.
 pending_reviews: dict[str, list[Finding]] = {}
 
+# package_id -> Terac opportunity id, for ops/debugging while pending.
+pending_opportunities: dict[str, str] = {}
+
 _cached_project_id: str | None = None
 
 
@@ -86,21 +89,49 @@ def _request_feasibility(task_description: str) -> str | None:
     return None  # proceed without a priced feasibility request rather than blocking forever
 
 
-def escalate(package_id: str, findings: list[Finding]) -> None:
+def is_pending(package_id: str) -> bool:
+    """True while a human review for this package is open. The workflow's
+    safety net uses this to launch the review itself if the agent never
+    called the escalate_review tool."""
+    return package_id in pending_reviews
+
+
+# Who Terac recruits for the review. No dedicated "cybersecurity" option
+# exists in their job-function filter (options fetched from
+# /filters/multi_select--job_function/options), so IT + Engineering is the
+# tightest expert panel available. Hard filters are required — an unfiltered
+# opportunity would recruit the general population, and per CLAUDE.md a
+# general-population reviewer cannot answer "is this malware".
+_EXPERT_FILTERS = [{
+    "multi_select--job_function": {
+        "$in": ["information-technology", "engineering"],
+    },
+}]
+
+
+def escalate(package_id: str, findings: list[Finding]) -> str:
     """Launches a real Terac opportunity pointing at our own review page.
 
     Fire and forget per the contract, but Terac's API calls are themselves
     synchronous — this runs inside the same BackgroundTask as process(), so
     "fire and forget" here just means "the caller doesn't wait on the human,"
     not "this function returns instantly."
+
+    Idempotent while a review is open: a second call (agent tool + safety
+    net, a retry) is a no-op rather than a second opportunity. Returns a
+    status string the agent tool surfaces to the model.
     """
+    if package_id in pending_reviews:
+        log.info("escalate %s: review already pending — not launching twice", package_id)
+        return "already_pending"
+
     pending_reviews[package_id] = findings
 
     if not config.is_configured("TERAC_API_KEY") or not config.PUBLIC_BASE_URL.startswith("http"):
         log.warning("escalate %s: TERAC_API_KEY or PUBLIC_BASE_URL not set — "
                     "package will sit in `escalated` until a decision is posted manually "
                     "to POST /review/%s/decision", package_id, package_id)
-        return
+        return "awaiting_manual_decision"
 
     try:
         project_id = _ensure_project()
@@ -110,25 +141,44 @@ def escalate(package_id: str, findings: list[Finding]) -> None:
         )
         feasibility_id = _request_feasibility(task_description)
 
-        _terac_request("POST", "/opportunities", {
+        opportunity = _terac_request("POST", "/opportunities", {
             "title": "Review a flagged code submission",
             "project_id": project_id,
             "num_participants": 1,
             "business_type": "b2b",
+            "filters": _EXPERT_FILTERS,
             **({"feasibility_request_id": feasibility_id} if feasibility_id else {}),
             "tasks": [{
                 "sequence": 1,
-                "task_type": "review",
+                "task_type": "activity",
                 "review_type": "auto_approve",
                 "task_url": f"{config.PUBLIC_BASE_URL}/review/{package_id}",
-                "title": "Verify: code submission review",
-                "description": "Review the scan findings and decide safe or malicious.",
+                "title": "Verify: security review of a flagged code submission",
+                "description": (
+                    "You are reviewing findings from an automated security scan "
+                    "of a take-home coding test. For each finding, decide "
+                    "whether a coding test has a legitimate reason to do this. "
+                    "An expert verdict of safe or malicious is required."
+                ),
                 "duration_minutes": 10,
             }],
         })
-        log.info("escalate %s: %d findings sent to Terac", package_id, len(findings))
+        opportunity_id = str(opportunity.get("id", ""))
+        pending_opportunities[package_id] = opportunity_id
+
+        # Terac creates the opportunity as a draft — launch starts recruiting.
+        try:
+            _terac_request("POST", f"/opportunities/{opportunity_id}/launch", {})
+        except EscalationError:
+            log.exception("escalate %s: launch call failed — opportunity %s "
+                          "stays a draft", package_id, opportunity_id)
+
+        log.info("escalate %s: opportunity %s, %d findings sent to Terac",
+                 package_id, opportunity_id, len(findings))
+        return "launched"
     except EscalationError:
         log.exception("escalate %s: failed to launch Terac opportunity", package_id)
+        return "failed"
 
 
 def resolve(package_id: str, human_verdict: str) -> None:

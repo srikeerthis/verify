@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS packages (
     company_phone   TEXT,
     candidate_phone TEXT,
 
+    -- 1 when a Stripe payment unlocked the dynamic (sandbox) scan for this
+    -- package. 0 is the free tier: static scan only.
+    dynamic         INTEGER NOT NULL DEFAULT 0,
+
     -- filled in by the pipeline
     sha256          TEXT,
     verdict         TEXT,               -- CLEAN | SUSPICIOUS | MALICIOUS
@@ -54,6 +58,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     message_id  TEXT,                    -- Linq message id, once sent
     sent_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (package_id, event)
+);
+
+-- One row per paid Stripe Checkout Session (pay.py). The PRIMARY KEY makes a
+-- payment spendable exactly once: INSERT succeeds only the first time.
+CREATE TABLE IF NOT EXISTS paid_sessions (
+    session_id  TEXT PRIMARY KEY,    -- cs_test_... / cs_live_...
+    package_id  TEXT,                -- the package that spent it
+    unlocked_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Linq retries a webhook up to 10 times over ~25 minutes. This is what stops

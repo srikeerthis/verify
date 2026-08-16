@@ -57,7 +57,11 @@ fi
 # --- shared config: generate secrets into .env on first use --------------
 [ -f .env ] || cp .env.example .env
 
-env_get() { grep "^$1=" .env | head -1 | cut -d= -f2-; }
+env_get() { # env_get KEY -> value, empty when the key is absent. Under
+  # `set -o pipefail` a missing key makes grep exit 1 and kill the script,
+  # so the pipeline needs the explicit rescue — callers test for empty.
+  grep "^$1=" .env | head -1 | cut -d= -f2- || true
+}
 
 put_kv() { # put_kv KEY VALUE — overwrite in place, or append when missing.
   # python rather than sed: `sed -i ''` is BSD-only and `sed -i` is GNU-only,
