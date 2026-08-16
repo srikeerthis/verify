@@ -1,0 +1,26 @@
+{% extends "marketing_base.html" %}
+{% block title %}Verify — log in{% endblock %}
+{% block navlinks %}
+<a href="/plans">Plans</a>
+<a class="btn primary" href="/login">Get started</a>
+{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="lc-band">
+      <span class="field-label">Checkpoint</span>
+      <h2>Show your credentials</h2>
+    </div>
+    <form class="lc-body" method="post" action="/login">
+      {% if error %}
+      <p class="field-label" style="color:var(--alert);margin-bottom:14px;">{{ error }}</p>
+      {% endif %}
+      <div class="field"><label for="email">Work email</label><input id="email" name="email" type="email" placeholder="you@company.com" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required></div>
+      <button class="btn primary" type="submit">Let me through</button>
+      <div class="lc-foot">First time here? Just log in &mdash; there's nothing to sign up for.</div>
+    </form>
+    <div class="lc-note">— demo access, any credentials work —</div>
+  </div>
+</div>
+{% endblock %}

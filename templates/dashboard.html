@@ -1,0 +1,65 @@
+{% extends "marketing_base.html" %}
+{% block title %}Verify — dashboard{% endblock %}
+{% block navlinks %}
+<a href="/dashboard">Dashboard</a>
+<a href="/plans">Plans</a>
+<a class="btn ghost" href="/logout">Log out</a>
+{% endblock %}
+{% block content %}
+<div class="dash">
+  <div class="dash-head">
+    <h2>Ledger &mdash; {{ company_name }}</h2>
+    <div class="who">{{ email }}</div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-lbl">Packages scanned</div>
+      <div class="stat-val">{{ stats.scanned }}</div>
+      <div class="stat-delta">{{ stats.scanned_delta }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Vulnerabilities found</div>
+      <div class="stat-val">{{ stats.vulnerabilities }}</div>
+      <div class="stat-delta">{{ stats.vulnerabilities_delta }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Held for review</div>
+      <div class="stat-val">{{ stats.held }}</div>
+      <div class="stat-delta">{{ stats.held_delta }}</div>
+    </div>
+    <div class="stat saved">
+      <div class="stat-lbl">Estimated saved</div>
+      <div class="stat-val">{{ stats.saved }}</div>
+      <div class="stat-delta">{{ stats.saved_delta }}</div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="panel">
+      <div class="panel-head"><h3>Recent packages</h3></div>
+      <table class="activity">
+        <thead><tr><th>Package</th><th>Verdict</th><th>Scanned</th></tr></thead>
+        <tbody>
+          {% for row in recent %}
+          <tr>
+            <td><div class="pkg-name">{{ row.name }}</div><div class="pkg-sub">&rarr; {{ row.direction }} &middot; {{ row.who }}</div></td>
+            <td><span class="pill {{ row.pill }}">{{ row.verdict }}</span></td>
+            <td>{{ row.when }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>Verdict split</h3></div>
+      <div class="breakdown">
+        <div class="bd-row"><div class="bd-label">Clean</div><div class="bd-bar-track"><div class="bd-bar ok" style="width:{{ split.clean }}%"></div></div><div class="bd-num">{{ split.clean }}%</div></div>
+        <div class="bd-row"><div class="bd-label">Held</div><div class="bd-bar-track"><div class="bd-bar warn" style="width:{{ split.held }}%"></div></div><div class="bd-num">{{ split.held }}%</div></div>
+        <div class="bd-row"><div class="bd-label">Blocked</div><div class="bd-bar-track"><div class="bd-bar bad" style="width:{{ split.blocked }}%"></div></div><div class="bd-num">{{ split.blocked }}%</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

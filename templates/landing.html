@@ -1,0 +1,79 @@
+{% extends "marketing_base.html" %}
+{% block title %}Verify — inspected before it changes hands{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <span class="kicker">DECLARATION REQUIRED &middot; BOTH DIRECTIONS</span>
+    <h1>We open it before you have to</h1>
+    <p class="lede">Every take-home a company sends, and every solution a candidate sends back, gets opened, run, and read by three separate reviewers first &mdash; not because we don't trust people, because we don't trust zip files.</p>
+    <div class="cta-row">
+      <a class="btn primary lg" href="/login">Get started free</a>
+      <a class="btn lg" href="#route">See the route</a>
+    </div>
+  </div>
+  <div class="hero-figure">
+  <span class="tag"></span>
+  <div class="hero-manifest">
+    <div class="field-label" style="margin-bottom:10px;">Declaration — No. A47F-2201</div>
+    <div class="hm-row"><span class="hm-k">Contents</span><span class="hm-v">backend-take-home.zip</span></div>
+    <div class="hm-row"><span class="hm-k">Origin &rarr; Bound for</span><span class="hm-v">Company &rarr; Candidate</span></div>
+    <div class="hm-row"><span class="hm-k">Opened by</span><span class="hm-v">Credential, supply-chain, runtime</span></div>
+    <div class="hm-row"><span class="hm-k">Run live?</span><span class="hm-v">Yes, in a sealed sandbox</span></div>
+    <div class="hm-row"><span class="hm-k">Disposition</span><span class="hm-v">Cleared, signed, released</span></div>
+    <div class="hm-stamp">
+      <svg class="stamp-mark" width="86" height="86" viewBox="0 0 86 86">
+        <defs>
+          <filter id="inkbleed" x="-30%" y="-30%" width="160%" height="160%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" result="grain" seed="7"></feTurbulence>
+            <feDisplacementMap in="SourceGraphic" in2="grain" scale="3.2"></feDisplacementMap>
+          </filter>
+        </defs>
+        <g class="ink">
+          <circle class="ring" cx="43" cy="43" r="40" stroke-width="1.5"></circle>
+          <circle class="ring" cx="43" cy="43" r="34" stroke-width="1"></circle>
+          <path id="stamp-arc-1" d="M 43,9 A 34,34 0 0 1 43,77" fill="none"></path>
+          <path id="stamp-arc-2" d="M 43,77 A 34,34 0 0 1 43,9" fill="none"></path>
+          <text font-size="7.6" letter-spacing="1.5"><textPath href="#stamp-arc-1" startOffset="4">CLEARED</textPath></text>
+          <text font-size="7.6" letter-spacing="1.5"><textPath href="#stamp-arc-2" startOffset="4">INSPECTED</textPath></text>
+          <polyline class="check" points="30,44 40,53 58,32" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        </g>
+      </svg>
+      <span class="ink-flash"></span>
+    </div>
+  </div>
+  </div>
+</section>
+
+<div class="proof-strip">
+  <div class="proof-item"><div class="num">03</div><div class="lbl">reviewers per package, none of them you</div></div>
+  <div class="proof-item"><div class="num">ZERO</div><div class="lbl">packages ever opened on your machine</div></div>
+  <div class="proof-item"><div class="num">&lt;60s</div><div class="lbl">from "received" to a verdict</div></div>
+  <div class="proof-item"><div class="num">ED25519</div><div class="lbl">signature, even on what we block</div></div>
+</div>
+
+<section class="route" id="route">
+  <div class="route-head">What happens between "sent" and "opened"</div>
+  <div class="route-track">
+    <div class="route-stage reveal" style="--rot:-1.6deg"><div class="stage-dot">1</div><h3>Received</h3><p>A zip or a link lands. It sits sealed &mdash; nobody's downloaded it, nobody's looked.</p></div>
+    <div class="route-stage reveal" style="--rot:1.1deg"><div class="stage-dot">2</div><h3>Scanning</h3><p>Three reviewers argue about it independently, then it actually runs, alone, in a sandbox built to be thrown away.</p></div>
+    <div class="route-stage reveal" style="--rot:-0.8deg"><div class="stage-dot">3</div><h3>Signed</h3><p>Clean, malicious, or genuinely unclear &mdash; a verdict gets signed either way. Unclear goes to a person first.</p></div>
+    <div class="route-stage reveal" style="--rot:1.7deg"><div class="stage-dot">4</div><h3>Delivered</h3><p>Only now does anyone on the other side get a text. The verdict travels with it.</p></div>
+  </div>
+</section>
+
+<section class="landing-cta">
+  <h2>Your candidates already assume the worst. Give them a reason not to.</h2>
+  <a class="btn primary lg" href="/login">Get started free</a>
+</section>
+
+<script>
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { entry.target.classList.add('in'); io.unobserve(entry.target); }
+      });
+    }, { threshold: 0.2 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  }
+</script>
+{% endblock %}
