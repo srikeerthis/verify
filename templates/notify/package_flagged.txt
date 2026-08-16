@@ -1,0 +1,4 @@
+{#- SMS to the recruiter. Their take-home is not going out. Say so plainly and
+    say what happens next — "under review" with no end in sight reads worse
+    than a refusal. -#}
+Verify: we can't send your take-home to the candidate yet. The scan flagged something a person needs to look at first. Nothing was delivered. What was flagged, and why: {{ verify_url }}

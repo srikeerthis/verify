@@ -1,0 +1,4 @@
+{#- SMS to the candidate. Their solution is held, not rejected — and they are
+    the one with a job on the line, so this must not sound like an accusation.
+    No scanner internals: they get the outcome, not the rule that fired. -#}
+Verify: your solution is on hold — our scan flagged something a person needs to check before we pass it to the company. This is often a false alarm. We'll text you either way: {{ verify_url }}

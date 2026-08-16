@@ -32,6 +32,8 @@ EVENT_ROLES: dict[str, str] = {
     "package_cleared": "recruiter",
     "package_ready": "candidate",
     "package_blocked": "recruiter",
+    "package_flagged": "recruiter",
+    "submission_flagged": "candidate",
     "escalation_resolved": "recruiter",
     "submission_verified": "recruiter",
 }
@@ -67,6 +69,20 @@ EVENT_PROMPTS: dict[str, str] = {
         "recruiter: blocked, why (the findings that matter, with their "
         "reasons), and the report link. Blunt is fine — they sent it, they "
         "need to know."
+    ),
+    "package_flagged": (
+        "The scan was ambiguous, so this take-home is held for human review and "
+        "was NOT sent to the candidate. Text the recruiter: not delivered, what "
+        "was flagged and why, and that a person is reviewing it. Do not promise "
+        "a time — we do not control how fast a reviewer answers."
+    ),
+    "submission_flagged": (
+        "The scan was ambiguous, so this candidate's solution is held for human "
+        "review and has NOT been passed to the company. Text the candidate that "
+        "it is on hold, that this is often a false alarm, and that they will "
+        "hear either way. No rule ids, no file names — they get the outcome, "
+        "not the scanner's reasoning. Someone's job is riding on this, so do "
+        "not make it sound like an accusation."
     ),
     "escalation_resolved": (
         "A human reviewer just resolved the escalation on this package. Text "

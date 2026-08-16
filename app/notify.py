@@ -55,9 +55,11 @@ Event = Literal[
     "package_cleared",
     "package_ready",
     "package_blocked",
+    "package_flagged",
     "escalation_resolved",
     "submission_received",
     "submission_verified",
+    "submission_flagged",
 ]
 
 # event -> which packages column holds the recipient.
@@ -71,11 +73,13 @@ EVENTS: dict[str, str] = {
     "package_received": "company_phone",     # ack: we have it, checking
     "package_cleared": "company_phone",      # result: clean, sent to candidate
     "package_ready": "candidate_phone",      # delivery: here is your take-home
-    "package_blocked": "company_phone",      # result: blocked
-    "escalation_resolved": "company_phone",  # result: a human decided
+    "package_blocked": "company_phone",       # result: blocked
+    "package_flagged": "company_phone",        # result: held for human review
+    "escalation_resolved": "company_phone",   # result: a human decided
     # submission, candidate -> recruiter
     "submission_received": "candidate_phone",  # ack: got your link, checking
     "submission_verified": "company_phone",    # result: it passed
+    "submission_flagged": "candidate_phone",   # result: held for human review
 }
 
 _env = Environment(

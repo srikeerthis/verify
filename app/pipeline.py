@@ -172,6 +172,15 @@ def process(package_id: str) -> None:
         if verdict.verdict == "SUSPICIOUS":
             with get_conn() as conn:
                 set_status(conn, package_id, "escalated")
+            # Tell whoever sent it that it is not going anywhere yet. Without
+            # this the sender hears nothing at all between "we have it" and a
+            # human verdict that may be hours away — and with no Terac key set,
+            # may never come. Silence here reads as a broken pipeline.
+            workflow.announce(
+                "package_flagged" if pkg["direction"] == "to_candidate"
+                else "submission_flagged",
+                package_id,
+            )
             escalate.escalate(package_id, findings)
             return
 
