@@ -43,9 +43,15 @@ if [ ! -x .venv/bin/python ]; then
   echo ">> creating venv with $PY (first run)..."
   "$PY" -m venv .venv
 fi
-if [ ! -x .venv/bin/uvicorn ]; then
-  echo ">> installing pipeline dependencies (first run)..."
+# Reinstall whenever requirements.txt changes, not just on the first run — a
+# merge that adds a dependency would otherwise leave everyone with a venv that
+# imports fine until the new module is reached.
+REQ_STAMP=.venv/.requirements.sha
+REQ_HASH=$( (shasum -a 256 requirements.txt 2>/dev/null || sha256sum requirements.txt) | cut -d' ' -f1 )
+if [ ! -x .venv/bin/uvicorn ] || [ "$(cat "$REQ_STAMP" 2>/dev/null)" != "$REQ_HASH" ]; then
+  echo ">> installing pipeline dependencies..."
   .venv/bin/pip install -q -r requirements.txt
+  printf '%s' "$REQ_HASH" > "$REQ_STAMP"
 fi
 
 # --- shared config: generate secrets into .env on first use --------------

@@ -211,7 +211,7 @@ def _collect_files_for_llm_review(ingested: Ingested) -> str:
 def _run_reviewer_agent(rule: str, system_prompt: str, source_dump: str) -> list[Finding]:
     from openai import OpenAI
 
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    client = OpenAI(api_key=config.SCAN_API_KEY, base_url=config.SCAN_API_URL)
 
     try:
         completion = client.chat.completions.create(
@@ -245,8 +245,8 @@ def _run_reviewer_agent(rule: str, system_prompt: str, source_dump: str) -> list
 
 def _scan_with_llm_agents(ingested: Ingested) -> list[Finding]:
     """Runs the three reviewer agents in parallel over the same file set."""
-    if not config.OPENAI_API_KEY:
-        log.warning("static_scan: OPENAI_API_KEY not set — skipping LLM reviewer agents")
+    if not config.SCAN_API_KEY:
+        log.warning("static_scan: SCAN_API_KEY not set — skipping LLM reviewer agents")
         return []
 
     source_dump = _collect_files_for_llm_review(ingested)

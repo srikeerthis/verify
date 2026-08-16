@@ -79,11 +79,20 @@ TERAC_PROJECT_ID = _get("TERAC_PROJECT_ID")
 
 # --- scan (static_scan.py LLM review, agent.py judge) --------------------
 # Deliberately separate from ANTHROPIC_API_KEY/AGENT_MODEL above, which are
-# Vera's (the SMS coordination agent). The scan judge and code review use
-# OpenAI — the key actually available — so they get their own model setting
-# to avoid the two LLM roles fighting over one config var.
-OPENAI_API_KEY = _get("OPENAI_API_KEY")
-SCAN_MODEL = _get("SCAN_MODEL", "gpt-4o-mini")
+# Vera's (the SMS coordination agent), so the two LLM roles never fight over
+# one config var.
+#
+# Runs on DeepSeek through Pioneer's OpenAI-compatible endpoint. The reviewers
+# read every file in a submission across three parallel agents, so this is by
+# far the most token-hungry thing in the product, and DeepSeek-V4-Flash is a
+# fraction of the price with a context window that fits a whole take-home.
+# Point SCAN_API_URL at https://api.openai.com/v1 to go back to OpenAI.
+SCAN_API_URL = _get("SCAN_API_URL", "https://api.pioneer.ai/v1")
+SCAN_MODEL = _get("SCAN_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731")
+# SCAN_API_KEY is the name to use; OPENAI_API_KEY still works so an existing
+# .env keeps running.
+SCAN_API_KEY = _get("SCAN_API_KEY") or _get("OPENAI_API_KEY")
+OPENAI_API_KEY = SCAN_API_KEY  # legacy alias, referenced by older call sites
 
 # --- superserve (sandbox_scan.py) ----------------------------------------
 # The `superserve` Python SDK reads this from the environment itself; also
