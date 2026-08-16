@@ -241,6 +241,10 @@ def notify(event: Event, package_id: str) -> None:
                 # Where a candidate sends their solution back. Only meaningful
                 # on a challenge; the submission templates ignore it.
                 submit_url=f"{config.PUBLIC_BASE_URL}/submit/{package_id}",
+                # Who sent it. A candidate getting a text from a number they do
+                # not know needs a name they recognise before they will trust
+                # anything else in the message.
+                from_email=pkg["company_email"],
                 # Web app pages (may be NULL when the handoff is off or
                 # failed) — templates fall back to verify_url.
                 download_page=pkg["webapp_verify_url"],

@@ -14,6 +14,10 @@ cd "$(dirname "$0")"
 
 WEB_PORT="${WEB_PORT:-3000}"
 API_PORT="${API_PORT:-8000}"
+# On by default: no SMTP is configured locally, so without this the login code
+# only appears in this terminal and testing on a phone is impossible. Set
+# DEV_MODE=0 to send codes by email only.
+DEV_MODE="${DEV_MODE:-1}"
 
 # --- stop anything already sitting on our ports (a stale server serving
 # old code is the classic "Cannot GET" mystery) --------------------------
@@ -173,7 +177,7 @@ echo "  pipeline (FastAPI)  http://localhost:$API_PORT   POST /packages"
 echo "  Ctrl-C stops both"
 echo
 
-INTEGRATION_API_KEY="$INTEGRATION_KEY" PORT="$WEB_PORT" \
+INTEGRATION_API_KEY="$INTEGRATION_KEY" PORT="$WEB_PORT" DEV_MODE="$DEV_MODE" \
   PIPELINE_URL="http://127.0.0.1:$API_PORT" node zipsign/server.js &
 WEB_PID=$!
 .venv/bin/uvicorn app.main:app --port "$API_PORT" &

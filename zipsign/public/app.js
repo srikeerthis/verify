@@ -56,7 +56,14 @@ async function sendCode() {
     const data = await postJson('/api/auth/request-otp', { email: value });
     email = value;
     $('#otpEmail').textContent = value;
-    showStatus(emailStatus, data.devOtp ? `${data.message} Dev code: ${data.devOtp}` : data.message, true);
+    showStatus(emailStatus, data.message, true);
+    if (data.devOtp) {
+      // Test mode: no mail server, so the code goes on the screen. It also
+      // fills the box, because retyping it on a phone is the slowest part of
+      // every test run.
+      otpInput.value = data.devOtp;
+      showStatus(otpStatus, `Test mode — your code is ${data.devOtp}, already filled in.`, true);
+    }
     $('#step2').hidden = false;
     otpInput.focus();
   } catch (err) {

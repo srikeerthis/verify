@@ -53,7 +53,10 @@ EVENT_PROMPTS: dict[str, str] = {
     ),
     "package_ready": (
         "The take-home scanned CLEAN, is signed, and is published. Text the "
-        "candidate it is ready. Tell them what was checked in plain English "
+        "candidate it is ready. Name the sender (from_email) early — a text "
+        "from an unknown number about a coding test looks exactly like a scam, "
+        "and the sender's address is what makes it real. Tell them what was "
+        "checked in plain English "
         "(does not read credentials, does not run code on install), give them "
         "the download link, and give them the submit_solution link so they "
         "know how to send their work back. Calm and short — this person thinks "
@@ -88,6 +91,9 @@ def _facts(package_id: str) -> str:
 
     facts = {
         "direction": pkg["direction"],
+        # The candidate must be told who sent this, by name, before anything
+        # else in the message will be believed.
+        "from_email": pkg["company_email"],
         "status": pkg["status"],
         "verdict": pkg["human_verdict"] or pkg["verdict"],
         "human_reviewed": bool(pkg["human_reviewed"]),
