@@ -9,7 +9,7 @@ NotConfigured and app/workflow.py falls back to the static templates — the
 product must run green at a demo with no keys set.
 
 `judge` is a separate LLM role — deliberately not sharing ANTHROPIC_API_KEY/
-AGENT_MODEL with the coordinator above. It uses OPENAI_API_KEY/SCAN_MODEL
+AGENT_MODEL with the coordinator above. It uses SCAN_API_KEY/SCAN_MODEL
 (see config.py) since that's the key actually available, and calls the
 OpenAI SDK directly rather than urllib (static_scan.py's LLM code review
 uses the same client for the same reason — two calls, not enough to route
@@ -76,13 +76,13 @@ def judge(findings: list[Finding]) -> Verdict:
     """Real model call (OpenAI). A parse/call failure defaults to SUSPICIOUS —
     failing toward human review is the correct bias, per CLAUDE.md.
     """
-    if not config.OPENAI_API_KEY:
-        log.warning("agent.judge: OPENAI_API_KEY not set — defaulting to SUSPICIOUS")
+    if not config.SCAN_API_KEY:
+        log.warning("agent.judge: SCAN_API_KEY not set — defaulting to SUSPICIOUS")
         return Verdict("SUSPICIOUS", 0.0)
 
     from openai import OpenAI
 
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    client = OpenAI(api_key=config.SCAN_API_KEY, base_url=config.SCAN_API_URL)
 
     try:
         completion = client.chat.completions.create(
