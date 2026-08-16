@@ -73,6 +73,23 @@ AGENT_HISTORY_TURNS = int(_get("AGENT_HISTORY_TURNS", "10"))
 # --- terac (escalate.py) ------------------------------------------------
 TERAC_API_KEY = _get("TERAC_API_KEY")
 TERAC_MCP_URL = _get("TERAC_MCP_URL")
+# Optional: reuse an existing Terac project instead of creating one on first
+# escalation.
+TERAC_PROJECT_ID = _get("TERAC_PROJECT_ID")
+
+# --- scan (static_scan.py LLM review, agent.py judge) --------------------
+# Deliberately separate from ANTHROPIC_API_KEY/AGENT_MODEL above, which are
+# Vera's (the SMS coordination agent). The scan judge and code review use
+# OpenAI — the key actually available — so they get their own model setting
+# to avoid the two LLM roles fighting over one config var.
+OPENAI_API_KEY = _get("OPENAI_API_KEY")
+SCAN_MODEL = _get("SCAN_MODEL", "gpt-4o-mini")
+
+# --- superserve (sandbox_scan.py) ----------------------------------------
+# The `superserve` Python SDK reads this from the environment itself; also
+# exposed here so sandbox_scan.py can check it's set before creating a
+# sandbox, rather than failing partway through a run.
+SUPERSERVE_API_KEY = _get("SUPERSERVE_API_KEY")
 
 # --- stripe (pay.py) ----------------------------------------------------
 STRIPE_SECRET_KEY = _get("STRIPE_SECRET_KEY")

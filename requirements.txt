@@ -2,7 +2,11 @@ fastapi
 uvicorn[standard]
 jinja2
 python-multipart      # form posts from the recruiter frontend
+superserve             # app/sandbox_scan.py — real dynamic scan in an isolated VM
+openai                 # app/agent.py judge() + app/static_scan.py LLM code review
 
-# Deliberately absent: an HTTP client. app/notify.py calls Linq with stdlib
-# urllib — one outbound call does not justify a dependency. Add httpx if
-# something else needs it.
+# Deliberately absent: a general HTTP client. app/notify.py's Linq call,
+# app/static_scan.py's OSV.dev lookup, app/escalate.py's Terac calls, and
+# app/agent.py's Anthropic coordinator call all use stdlib urllib — one
+# outbound call doesn't justify a dependency. openai pulls in httpx
+# transitively; nothing here adds it directly.
