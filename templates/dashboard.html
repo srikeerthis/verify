@@ -70,6 +70,8 @@
             <td><span class="pill {{ row.pill }}">{{ row.verdict }}</span></td>
             <td>{{ row.when }}</td>
           </tr>
+          {% else %}
+          <tr><td colspan="3" class="field-label" style="padding:20px 18px;">Nothing sent yet — use the form above to send your first package.</td></tr>
           {% endfor %}
         </tbody>
       </table>

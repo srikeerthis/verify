@@ -70,6 +70,15 @@ def logout() -> RedirectResponse:
     return response
 
 
+_DASH_PILL = {"CLEAN": "ok", "SUSPICIOUS": "warn", "MALICIOUS": "bad"}
+_COST_PER_VULN = 5_000  # presentable estimate: incident cost avoided per finding caught
+
+
+def _dash_name(source_url: str, package_id: str) -> str:
+    tail = source_url.rstrip("/").rsplit("/", 1)[-1]
+    return tail if tail.lower().endswith(".zip") else f"package {package_id[:8]}"
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     email = request.cookies.get(SESSION_COOKIE)
@@ -78,23 +87,60 @@ def dashboard(request: Request):
 
     company_name = email.split("@")[-1].split(".")[0].title() + " Hiring Team" if "@" in email else "Your Team"
 
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT package_id, direction, source_url, status, verdict,
+                   human_verdict, findings_json, created_at
+              FROM packages
+             WHERE company_email = ?
+             ORDER BY created_at DESC
+            """,
+            (email,),
+        ).fetchall()
+
+    scanned = len(rows)
+    vulnerabilities = sum(len(json.loads(r["findings_json"] or "[]")) for r in rows)
+    held = sum(1 for r in rows if r["status"] == "escalated")
+    counts = {"CLEAN": 0, "SUSPICIOUS": 0, "MALICIOUS": 0}
+    for r in rows:
+        v = r["human_verdict"] or r["verdict"]
+        if v in counts:
+            counts[v] += 1
+        elif r["status"] == "escalated":
+            counts["SUSPICIOUS"] += 1
+
+    total_judged = sum(counts.values()) or 1
+    split = {
+        "clean": round(counts["CLEAN"] / total_judged * 100),
+        "held": round(counts["SUSPICIOUS"] / total_judged * 100),
+        "blocked": round(counts["MALICIOUS"] / total_judged * 100),
+    }
+
+    recent = []
+    for r in rows[:8]:
+        v = r["human_verdict"] or r["verdict"] or "Scanning"
+        label = v.title() if v != "SUSPICIOUS" else "Held"
+        recent.append({
+            "name": _dash_name(r["source_url"], r["package_id"]),
+            "direction": "candidate" if r["direction"] == "to_candidate" else "company",
+            "who": email if r["direction"] == "to_candidate" else "candidate submission",
+            "verdict": label,
+            "pill": _DASH_PILL.get(v, "warn"),
+            "when": r["created_at"][:16].replace("T", " "),
+        })
+
     ctx = {
         "email": email,
         "company_name": company_name,
         "stats": {
-            "scanned": "1,284", "scanned_delta": "+12% this month",
-            "vulnerabilities": "37", "vulnerabilities_delta": "+3 this week",
-            "held": "09", "held_delta": "avg. 4 min to resolve",
-            "saved": "$184,000", "saved_delta": "37 incidents avoided",
+            "scanned": f"{scanned:,}", "scanned_delta": "since you started sending packages",
+            "vulnerabilities": f"{vulnerabilities:,}", "vulnerabilities_delta": "findings across all scans",
+            "held": f"{held:02d}", "held_delta": "awaiting a human decision",
+            "saved": f"${vulnerabilities * _COST_PER_VULN:,}", "saved_delta": f"{vulnerabilities} incidents avoided",
         },
-        "split": {"clean": 91, "held": 6, "blocked": 3},
-        "recent": [
-            {"name": "backend-take-home-v2.zip", "direction": "candidate", "who": "j.rivera@acme.com", "verdict": "Clean", "pill": "ok", "when": "2m ago"},
-            {"name": "solution-final.zip", "direction": "company", "who": "candidate submission", "verdict": "Malicious", "pill": "bad", "when": "41m ago"},
-            {"name": "react-assessment.zip", "direction": "candidate", "who": "m.chen@acme.com", "verdict": "Clean", "pill": "ok", "when": "1h ago"},
-            {"name": "solution-attempt-1.zip", "direction": "company", "who": "candidate submission", "verdict": "Held", "pill": "warn", "when": "3h ago"},
-            {"name": "api-challenge.zip", "direction": "candidate", "who": "d.osei@acme.com", "verdict": "Clean", "pill": "ok", "when": "Yesterday"},
-        ],
+        "split": split,
+        "recent": recent,
     }
     return templates.TemplateResponse(request, "dashboard.html", ctx)
 
