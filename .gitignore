@@ -9,3 +9,6 @@ keys/
 zipsign/node_modules/
 zipsign/data/
 zipsign/.env
+
+# direct zip uploads to /packages (app/main.py)
+uploads/

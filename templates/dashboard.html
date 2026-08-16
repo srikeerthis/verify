@@ -12,6 +12,29 @@
     <div class="who">{{ email }}</div>
   </div>
 
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-head"><h3>Send a package for inspection</h3></div>
+    <form id="upload-form" style="padding:18px 20px;display:grid;gap:14px;grid-template-columns:1fr 1fr;" enctype="multipart/form-data">
+      <input type="hidden" name="company_email" value="{{ email }}">
+      <div class="field" style="grid-column:1 / -1;">
+        <label for="up-file">Take-home .zip</label>
+        <input id="up-file" name="file" type="file" accept=".zip,application/zip" required>
+      </div>
+      <div class="field">
+        <label for="up-company-phone">Your number</label>
+        <input id="up-company-phone" name="company_phone" type="tel" placeholder="+15551234567" required>
+      </div>
+      <div class="field">
+        <label for="up-candidate-phone">Candidate's number</label>
+        <input id="up-candidate-phone" name="candidate_phone" type="tel" placeholder="+15559876543" required>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <button class="btn primary" type="submit">Send for inspection</button>
+        <span id="up-status" class="field-label" style="margin-left:10px;"></span>
+      </div>
+    </form>
+  </div>
+
   <div class="stat-row">
     <div class="stat">
       <div class="stat-lbl">Packages scanned</div>
@@ -62,4 +85,21 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.getElementById('upload-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var status = document.getElementById('up-status');
+    status.textContent = 'sending for inspection…';
+    try {
+      var res = await fetch('/packages', { method: 'POST', body: new FormData(e.target) });
+      var body = await res.json();
+      if (!res.ok) { status.textContent = body.detail || 'that didn\'t go through'; return; }
+      status.textContent = 'accepted — redirecting to status…';
+      window.location.href = body.verify_url;
+    } catch (err) {
+      status.textContent = 'network error — try again';
+    }
+  });
+</script>
 {% endblock %}

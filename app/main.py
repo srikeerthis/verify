@@ -10,9 +10,16 @@ Everything else is the verify surface from CLAUDE.md.
 
 import json
 import logging
+import uuid
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.templating import Jinja2Templates
 
 from app import config, escalate, handoff, pay, pipeline, signing, tools, webhooks, workflow
@@ -98,9 +105,9 @@ def plans(request: Request):
 
 
 @app.post("/packages")
-def create_package(
+async def create_package(
     background: BackgroundTasks,
-    source_url: str = Form(...),
+    source_url: str = Form(""),
     company_email: str = Form(...),
     company_phone: str = Form(...),
     candidate_phone: str = Form(...),
@@ -110,6 +117,7 @@ def create_package(
     webapp_signature_url: str = Form(""),
     webapp_publickey_url: str = Form(""),
     unlock_code: str = Form(""),
+    file: UploadFile | None = File(None),
 ) -> JSONResponse:
     """Recruiter intake. Accepts a form post or JSON with the same field names.
 
@@ -124,14 +132,28 @@ def create_package(
     unlock_code is the Stripe session id the web app verified via /pay/verify.
     Static scanning is free for everyone; a valid, unused code additionally
     unlocks the dynamic sandbox run and is spent by this call.
+
+    `file` is a direct zip upload — no web app hop required. It's stored under
+    /uploads and re-referenced by URL so it flows through the exact same
+    ingest path (a zip source, fetched over http) that source_url always did.
     """
     for label, phone in (("company_phone", company_phone),
                          ("candidate_phone", candidate_phone)):
         if not E164.match(phone):
             raise HTTPException(422, f"{label} must be E.164, e.g. +15551234567")
 
-    if not source_url.startswith(("http://", "https://")):
-        raise HTTPException(422, "source_url must be an http(s) link")
+    if file is not None and file.filename:
+        if not file.filename.lower().endswith(".zip"):
+            raise HTTPException(422, "uploaded file must be a .zip")
+        data = await file.read()
+        if data[:2] != b"PK":
+            raise HTTPException(422, "uploaded file isn't a zip archive")
+        upload_id = str(uuid.uuid4())
+        config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        (config.UPLOAD_DIR / f"{upload_id}.zip").write_bytes(data)
+        source_url = f"{config.PUBLIC_BASE_URL}/uploads/{upload_id}.zip"
+    elif not source_url.startswith(("http://", "https://")):
+        raise HTTPException(422, "source_url must be an http(s) link, or attach a .zip file")
 
     package_id = pipeline.create_challenge(
         source_url=source_url,
@@ -492,6 +514,18 @@ def pay_verify() -> JSONResponse:
             status_code=402,
         )
     return JSONResponse({"ok": True, "unlock_code": code})
+
+
+@app.get("/uploads/{filename}")
+def uploaded_zip(filename: str) -> FileResponse:
+    """Serves a zip a recruiter attached directly to /packages, so ingest.fetch
+    can pull it back over http like any other source_url. filename is always
+    a uuid we generated — never user-controlled path segments beyond that.
+    """
+    path = config.UPLOAD_DIR / filename
+    if not filename.endswith(".zip") or "/" in filename or "\\" in filename or not path.exists():
+        raise HTTPException(404, "no such upload")
+    return FileResponse(path, media_type="application/zip")
 
 
 @app.get("/pubkey", response_class=PlainTextResponse)

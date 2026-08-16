@@ -40,6 +40,7 @@ def _get(key: str, default: str = "") -> str:
 PUBLIC_BASE_URL = _get("PUBLIC_BASE_URL", "http://localhost:8000")
 DB_PATH = Path(_get("DB_PATH", str(ROOT / "verify.db")))
 TEMPLATE_DIR = ROOT / "templates"
+UPLOAD_DIR = ROOT / "uploads"
 
 # --- linq (notify.py) ---------------------------------------------------
 LINQ_API_KEY = _get("LINQ_API_KEY")
