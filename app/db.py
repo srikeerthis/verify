@@ -1,11 +1,17 @@
-"""SQLite. No migrations — schema is created on startup and edited in place.
+"""SQLite. No migration framework — the schema is edited in place.
 
-If you change a column while the demo db exists, delete verify.db and restart.
+Adding a column is safe: init_db reconciles an existing database against
+SCHEMA on every startup. Removing or retyping one still means deleting
+verify.db.
 """
 
+import logging
+import re
 import sqlite3
 
 from app.config import DB_PATH
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS packages (
@@ -124,9 +130,54 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
+def _declared_columns(table: str) -> list[tuple[str, str]]:
+    """(name, type) for each column SCHEMA declares on `table`."""
+    match = re.search(
+        rf"CREATE TABLE IF NOT EXISTS {table} \((.*?)\n\);", SCHEMA, re.S
+    )
+    if not match:
+        return []
+
+    columns = []
+    for line in match.group(1).splitlines():
+        line = line.split("--")[0].strip().rstrip(",")
+        if not line or line.upper().startswith(
+            ("PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT")
+        ):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            columns.append((parts[0], parts[1]))
+    return columns
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Bring an existing db up to the current SCHEMA.
+
+    CREATE TABLE IF NOT EXISTS silently does nothing when the table already
+    exists, so adding a column to SCHEMA leaves every db created before that
+    change broken — inserts fail with "no column named x" at runtime, which is
+    a 500 in the middle of a demo rather than an error at startup.
+
+    Only additive: columns are added with their type and nothing else. A NOT
+    NULL or a non-constant DEFAULT cannot be applied to an existing table
+    anyway, and dropping or retyping a column still means deleting the file.
+    """
+    for table in re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", SCHEMA):
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue  # brand new table — executescript just made it correctly
+        for name, column_type in _declared_columns(table):
+            if name not in existing:
+                log.warning("db: adding missing column %s.%s", table, name)
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}")
+    conn.commit()
+
+
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        _add_missing_columns(conn)
 
 
 def get_package(conn: sqlite3.Connection, package_id: str) -> sqlite3.Row | None:
