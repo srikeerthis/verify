@@ -1,0 +1,50 @@
+{% extends "marketing_base.html" %}
+{% block title %}Verify — plans{% endblock %}
+{% block content %}
+<div class="plans-head">
+  <span class="field-label">Tariff</span>
+  <h2>Every lane gets the same inspection. Speed and paperwork are what you're paying for.</h2>
+  <p>No plan skips a reviewer. Upgrade, downgrade, cancel &mdash; whenever.</p>
+</div>
+
+<div class="plans-grid">
+  <div class="plan">
+    <div class="p-name">Starter</div>
+    <div class="p-price">$0<span>/mo</span></div>
+    <div class="p-desc">For teams just trying it out.</div>
+    <a class="btn" href="/login">Get started</a>
+    <ul>
+      <li><span class="ck">&check;</span>25 packages / month</li>
+      <li><span class="ck">&check;</span>Credential &amp; supply-chain review</li>
+      <li><span class="ck">&check;</span>Signed delivery</li>
+      <li><span class="ck">&check;</span>Email support</li>
+    </ul>
+  </div>
+  <div class="plan featured">
+    <div class="fbadge">&#9678; Most routed</div>
+    <div class="p-name">Team</div>
+    <div class="p-price">$10<span>/mo</span></div>
+    <div class="p-desc">For active hiring pipelines.</div>
+    <a class="btn primary" href="/login">Get started</a>
+    <ul>
+      <li><span class="ck">&check;</span>Unlimited packages</li>
+      <li><span class="ck">&check;</span>All three reviewer agents</li>
+      <li><span class="ck">&check;</span>Sandbox execution scan</li>
+      <li><span class="ck">&check;</span>Human review on hold verdicts</li>
+      <li><span class="ck">&check;</span>Dashboard &amp; team seats</li>
+    </ul>
+  </div>
+  <div class="plan">
+    <div class="p-name">Enterprise</div>
+    <div class="p-price">Custom</div>
+    <div class="p-desc">For hiring at scale.</div>
+    <a class="btn" href="/login">Contact us</a>
+    <ul>
+      <li><span class="ck">&check;</span>Everything in Team</li>
+      <li><span class="ck">&check;</span>SSO &amp; audit log</li>
+      <li><span class="ck">&check;</span>Custom scan policies</li>
+      <li><span class="ck">&check;</span>Dedicated support</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

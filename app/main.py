@@ -31,6 +31,72 @@ def _startup() -> None:
     init_db()
 
 
+SESSION_COOKIE = "verify_demo_session"
+
+
+@app.get("/", response_class=HTMLResponse)
+def landing(request: Request):
+    """The pitch. Explains the product before asking anyone to trust it with a zip."""
+    return templates.TemplateResponse(request, "landing.html", {})
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, error: str = ""):
+    return templates.TemplateResponse(request, "login.html", {"error": error})
+
+
+@app.post("/login")
+def login_submit(email: str = Form(...), password: str = Form(...)) -> RedirectResponse:
+    """Demo login: any credentials are accepted. This is a hackathon prop, not
+    an auth system — the cookie just carries the email through to /dashboard
+    so it can say something other than nothing.
+    """
+    response = RedirectResponse("/dashboard", status_code=303)
+    response.set_cookie(SESSION_COOKIE, email, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/logout")
+def logout() -> RedirectResponse:
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    email = request.cookies.get(SESSION_COOKIE)
+    if not email:
+        return RedirectResponse("/login", status_code=303)
+
+    company_name = email.split("@")[-1].split(".")[0].title() + " Hiring Team" if "@" in email else "Your Team"
+
+    ctx = {
+        "email": email,
+        "company_name": company_name,
+        "stats": {
+            "scanned": "1,284", "scanned_delta": "+12% this month",
+            "vulnerabilities": "37", "vulnerabilities_delta": "+3 this week",
+            "held": "09", "held_delta": "avg. 4 min to resolve",
+            "saved": "$184,000", "saved_delta": "37 incidents avoided",
+        },
+        "split": {"clean": 91, "held": 6, "blocked": 3},
+        "recent": [
+            {"name": "backend-take-home-v2.zip", "direction": "candidate", "who": "j.rivera@acme.com", "verdict": "Clean", "pill": "ok", "when": "2m ago"},
+            {"name": "solution-final.zip", "direction": "company", "who": "candidate submission", "verdict": "Malicious", "pill": "bad", "when": "41m ago"},
+            {"name": "react-assessment.zip", "direction": "candidate", "who": "m.chen@acme.com", "verdict": "Clean", "pill": "ok", "when": "1h ago"},
+            {"name": "solution-attempt-1.zip", "direction": "company", "who": "candidate submission", "verdict": "Held", "pill": "warn", "when": "3h ago"},
+            {"name": "api-challenge.zip", "direction": "candidate", "who": "d.osei@acme.com", "verdict": "Clean", "pill": "ok", "when": "Yesterday"},
+        ],
+    }
+    return templates.TemplateResponse(request, "dashboard.html", ctx)
+
+
+@app.get("/plans", response_class=HTMLResponse)
+def plans(request: Request):
+    return templates.TemplateResponse(request, "plans.html", {})
+
+
 @app.post("/packages")
 def create_package(
     background: BackgroundTasks,
