@@ -1,4 +1,4 @@
-{#- SMS. The one message a candidate gets — it has to carry the trust claim and
-    tell them how to send work back. Two links is the most an SMS can carry
-    without looking like spam. -#}
-Verify: your take-home is checked and ready — it doesn't read your SSH keys, cloud creds or browser data. Open it: {{ download_page or verify_url }} Submit your solution here when done: {{ submit_url }}
+{#- SMS. The one message a candidate gets. It has to say who sent it before it
+    asks for anything — a text from an unknown number about a coding test is
+    exactly what a scam looks like. -#}
+Verify: your take-home assignment from {{ from_email or "the company" }} is checked and ready — it doesn't read your SSH keys, cloud creds or browser data. Open it: {{ download_page or verify_url }} Submit your solution when done: {{ submit_url }}
